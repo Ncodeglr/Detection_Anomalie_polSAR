@@ -1,0 +1,3 @@
+[submodule "cvnn"]
+	path = cvnn
+	url = https://github.com/Ncodeglr/cvnn.git

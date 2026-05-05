@@ -1,0 +1,38 @@
+# Environnements virtuels
+venv/
+.venv/
+env/
+.env/
+
+# Fichiers compilés Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Données et Checkpoints
+datasets/
+data/
+checkpoints/
+*.pt
+*.pth
+
+# Logs et Slurm
+logs/
+logslurms/
+*.log
+
+# Fichiers de configuration générés temporairement
+configs.yml
+*config.yml
+job_id/
+job.sbatch
+
+# IDEs et OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Pytest
+.pytest_cache/
