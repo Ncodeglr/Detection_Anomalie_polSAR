@@ -1,0 +1,33 @@
+# Configuration pour tester le chargement des données PolSAR (SAN_FRANCISCO_ALOS2)
+# Tâche de reconstruction avec un modèle à valeurs complexes
+
+task: reconstruction
+
+model:
+  layer_mode: complex
+
+data:
+  dataset:
+    name: PolSFDataset
+    trainpath: ./data/SAN_FRANCISCO_ALOS2
+    has_labels: False
+    
+    # Découpage de l'image radar en patchs (obligatoire pour ALOS/PolSF)
+    patch_size: 32
+    patch_stride: 32
+    azimut_split_x: 2000
+
+  # Paramètres du DataLoader
+  batch_size: 32
+  num_workers: 0
+  shuffle: True
+
+  # Division des données
+  valid_ratio: 0.1
+  test_ratio: 0.1 
+
+  recompute_statistics: True
+
+  # Pipeline de transformations
+  transforms:
+    - name: logamplitude
