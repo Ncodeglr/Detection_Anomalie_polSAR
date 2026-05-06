@@ -10,6 +10,8 @@ data:
   dataset:
     name: PolSFDataset
     trainpath: ./data/SAN_FRANCISCO_ALOS2
+    azimut_split_x1: 2800  # 
+    azimut_split_x2: 4000  # 
     has_labels: False
     
     # Découpage de l'image radar en patchs (obligatoire pour ALOS/PolSF)
