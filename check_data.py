@@ -8,31 +8,41 @@ import numpy as np
 # Ajout du dossier src au chemin pour pouvoir importer cvnn si vous ne l'avez pas installé via pip/poetry
 sys.path.append(os.path.join(os.path.dirname(__file__), "cvnn", "src"))
 
-# Ajout des imports _create_dataset et _parse_dataset_config pour charger l'image complète
-from cvnn.data import azimut_split, _create_dataset, _parse_dataset_config
+# Ajout des imports pour charger et assembler l'image complète
+from cvnn.data import azimut_split, get_full_image_dataloader
 from cvnn.config import load_config
+from cvnn.inference import _assemble_image
+from cvnn.physics import pauli_transform
+from cvnn.data_processing import equalize
 
-def visualize_azimut_split(labels_full_image: np.ndarray, x1: int, x2: int):
+def visualize_azimut_split(full_image: np.ndarray, x1: int, x2: int):
     """
-    Affiche la carte de vérité terrain globale avec les lignes de découpe.
+    Affiche l'image radar globale avec les lignes de découpe.
     """
     plt.figure(figsize=(10, 15))
     
-    # Affichage de la carte des labels
-    plt.imshow(labels_full_image, cmap='tab20', interpolation='nearest')
-    plt.colorbar(label='Classes')
+    # Transformation Pauli et égalisation
+    if full_image.ndim == 3 and full_image.shape[0] in [3, 4]:
+        pauli_img = pauli_transform(full_image)
+        pauli_img, _ = equalize(pauli_img)
+        display_img = pauli_img.transpose(1, 2, 0)
+        plt.imshow(display_img, origin='upper')
+    else:
+        img_eq, _ = equalize(full_image[0:1] if full_image.ndim == 3 else full_image)
+        if img_eq.ndim == 3: img_eq = img_eq.transpose(1, 2, 0).squeeze()
+        plt.imshow(img_eq, cmap='gray', origin='upper')
     
     # Ajout des lignes de découpe
     plt.axhline(y=x1, color='red', linestyle='--', linewidth=3, label=f'Coupe 1 (x1={x1})')
     plt.axhline(y=x2, color='white', linestyle='--', linewidth=3, label=f'Coupe 2 (x2={x2})')
     
     # Annotations des zones
-    plt.text(100, x1/2, 'ZONE 1 (Train/Valid)', color='red', fontsize=14, fontweight='bold')
-    plt.text(100, x1 + (x2-x1)/2, 'ZONE 2.1 (Test A)', color='white', fontsize=14, fontweight='bold')
-    plt.text(100, x2 + 500, 'ZONE 2.2 (Test B)', color='white', fontsize=14, fontweight='bold')
+    plt.text(100, x1/2, 'ZONE 1 (Train/Valid/Test)', color='red', fontsize=14, fontweight='bold', bbox=dict(facecolor='black', alpha=0.5))
+    plt.text(100, x1 + (x2-x1)/2, 'ZONE 2.1 (Test A)', color='white', fontsize=14, fontweight='bold', bbox=dict(facecolor='black', alpha=0.5))
+    plt.text(100, x2 + 500, 'ZONE 2.2 (Test B)', color='white', fontsize=14, fontweight='bold', bbox=dict(facecolor='black', alpha=0.5))
     
     plt.legend()
-    plt.title("Répartition des classes selon les coupes azimutales")
+    plt.title("Répartition des zones sur l'image Radar (SAN_FRANCISCO_ALOS2)")
     plt.show()
 
 def main():
@@ -74,29 +84,27 @@ def main():
         if "crop_coordinates" in cfg_temp["data"]["dataset"]:
             del cfg_temp["data"]["dataset"]["crop_coordinates"]
             
-        dataset_info = _parse_dataset_config(cfg_temp)
+        print("    -> Chargement des patchs pour reconstruire l'image globale (cela peut prendre quelques secondes)...")
+        loader_full, n_rows, n_cols = get_full_image_dataloader(cfg_temp, use_cuda=False)
         
-        # Chargement du dataset sans transformation pour récupérer uniquement la vérité terrain
-        full_dataset = _create_dataset(cfg_temp, transform=None, dataset_config=dataset_info)
+        patches = []
+        indices = []
+        for batch in loader_full:
+            inputs = batch[0] if isinstance(batch, (tuple, list)) else batch
+            patches.extend([seg for seg in inputs.cpu().numpy()])
+            
+            if isinstance(batch, (tuple, list)) and len(batch) >= 2:
+                idx = batch[1] if len(batch) == 2 else batch[2]
+                indices.extend(idx.cpu().detach().numpy())
+                    
+        patch_size = cfg_temp["data"]["dataset"]["patch_size"]
+        num_channels = patches[0].shape[0]
         
-        # Extraction de la carte des labels en gérant les différents cas possibles
-        if hasattr(full_dataset, 'labels'):
-            labels_full = full_dataset.labels
-        elif hasattr(full_dataset, 'targets'):
-            labels_full = full_dataset.targets
-        else:
-            # Fallback spécifique au PolSFDataset / ALOSDataset
-            labels_full = full_dataset.alos_dataset.labels if hasattr(full_dataset, 'alos_dataset') else None
-            
-        if labels_full is not None:
-            # Conversion en numpy array si c'est un tenseur PyTorch
-            if torch.is_tensor(labels_full):
-                labels_full = labels_full.numpy()
-            
-            print("    -> L'image va s'ouvrir. Fermez la fenêtre pour continuer l'exécution du script.")
-            visualize_azimut_split(labels_full, x1, x2)
-        else:
-            print("    [!] Impossible de trouver l'attribut des labels dans le dataset pour la visualisation.")
+        print("    -> Assemblage de l'image radar...")
+        full_image = _assemble_image(patches, num_channels, n_rows, n_cols, patch_size, indices if len(indices) > 0 else None)
+        
+        print("    -> L'image va s'ouvrir. Fermez la fenêtre pour continuer l'exécution du script.")
+        visualize_azimut_split(full_image, x1, x2)
             
     except Exception as e:
         print(f"    [!] Erreur lors de la visualisation : {e}")

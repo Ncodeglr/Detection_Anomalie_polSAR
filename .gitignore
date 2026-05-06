@@ -16,6 +16,7 @@ data/
 checkpoints/
 *.pt
 *.pth
+*.npy
 
 # Logs et Slurm
 logs/
@@ -36,3 +37,8 @@ job.sbatch
 
 # Pytest
 .pytest_cache/
+
+# Résultats générés (Méthodes classiques, ML, etc.)
+calibration_results/
+test_results/
+*.png
