@@ -26,7 +26,7 @@ Ce projet implémente un pipeline complet pour la détection d'anomalies non-sup
 
 - `cvnn/` : Cœur de la bibliothèque pour les réseaux de neurones complexes, le chargement des images (ALOS/PolSF) et la gestion des dataloaders.
 - `configs/` : Fichiers YAML de configuration (découpage azimutal, patchs, transformations, etc.).
-- `src/methode_Classique/` : Pipeline d'extraction de caractéristiques physiques (Covariance globale, Corrélations, Intensités). Comprend l'étalonnage de la normalité (`H0.py`), l'injection d'anomalies physiques comme la diaphonie (`H1.py`) et l'évaluation (`plot_metrics.py`).
+- `src/methode_Classique/` : Pipeline d'extraction de caractéristiques physiques (Covariance globale, Corrélations, Intensités). Comprend l'étalonnage de la normalité (`H0.py`), l'injection d'anomalies physiques comme le CrossTalk(`H1.py`) et l'évaluation (`plot_metrics.py`).
 - `src/methode_MachineLearning/` : Implémentation d'algorithmes de détection d'anomalies traditionnels comme le SVDD (Support Vector Data Description).
 
 ## Exécution du pipeline d'anomalies (Classique & ML)
