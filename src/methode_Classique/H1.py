@@ -83,7 +83,7 @@ class ChannelGainImbalance(PhysicalH1Generator):
 
 def extract_anomalous_features(dataloader, anomaly_generator: PhysicalH1Generator, desc="Extraction H1"):
     """ 
-    Extrait les caractéristiques (Features 13) après avoir altéré physiquement 
+    Extrait les caractéristiques (16 Features) après avoir altéré physiquement 
     les matrices de covariance du flux de données.
     """
     X_list = []
@@ -96,13 +96,6 @@ def extract_anomalous_features(dataloader, anomaly_generator: PhysicalH1Generato
             
         x_np = inputs.cpu().numpy()
         
-        # Repositionnement des canaux si nécessaire (Copie de votre feature_extraction.py)
-        if x_np.shape[1] != 4:
-            if x_np.shape[-1] == 4:
-                x_np = np.transpose(x_np, (0, 3, 1, 2))
-            elif x_np.shape[2] == 4:
-                x_np = np.transpose(x_np, (0, 2, 1, 3))
-                
         # 1. Calcul de la covariance pure
         mat_C_batched = compute_batched_global_covariance(x_np)
         

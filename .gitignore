@@ -41,4 +41,5 @@ job.sbatch
 # Résultats générés (Méthodes classiques, ML, etc.)
 calibration_results/
 test_results/
+ml_results/
 *.png
