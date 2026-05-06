@@ -43,14 +43,14 @@ def main():
     # --- SOUS-ÉCHANTILLONNAGE POUR L'ENTRAÎNEMENT ---
     # CVXOPT a une complexité cubique O(N^3). Résoudre une matrice 10000x10000 
     # nécessite beaucoup de RAM et de temps. On sélectionne un sous-ensemble aléatoire pour l'entraînement.
-    N_TRAIN = 2000
+    N_TRAIN = 2500
     np.random.seed(42)
     indices = np.random.choice(X_zone1.shape[0], min(N_TRAIN, X_zone1.shape[0]), replace=False)
     X_train_sub = X_zone1[indices]
     
     print(f"[*] Entraînement du modèle SVDD (N={X_train_sub.shape[0]} patchs)...")
     # On utilise le kernel RBF normal car vos features sont déjà réelles (Partie Réelle, Imaginaire et Spans séparés)
-    svdd_model = train_svdd_complex_simple2(X_train_sub, C=0.1, kernel='rbf', gamma=0.5, verbose=True)
+    svdd_model = train_svdd_complex_simple2(X_train_sub, C=0.5, kernel='rbf', gamma=0.5, verbose=True)
     
     print("\n[*] Calcul des scores de distance...")
     # On évalue sur toute la Zone 1 pour trouver le seuil PFA
