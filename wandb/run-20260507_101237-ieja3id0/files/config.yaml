@@ -1,0 +1,57 @@
+_wandb:
+    value:
+        cli_version: 0.26.1
+        e:
+            t1jrguoybscd7oaiynbb874vel0c5pxi:
+                codePath: test_wandb.py
+                codePathLocal: test_wandb.py
+                cpu_count: 20
+                cpu_count_logical: 20
+                cudaVersion: "13.2"
+                disk:
+                    /:
+                        total: "3744751403008"
+                        used: "304549408768"
+                email: groliernicolasjean@gmail.com
+                executable: /home/nicolas/Documents/Detection_Anomalie_polSAR/venv/bin/python3
+                git:
+                    commit: e9ed44eb278f3682cca2153cc24db0fa5df2a9f3
+                    remote: https://github.com/Ncodeglr/Detection_Anomalie_polSAR.git
+                gpu: NVIDIA GeForce RTX 5090
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Blackwell
+                      cudaCores: 21760
+                      memoryTotal: "34190917632"
+                      name: NVIDIA GeForce RTX 5090
+                      uuid: GPU-7e49da2c-fd51-ec7c-2b42-a8d3b03e65fd
+                host: nicolaspc
+                memory:
+                    total: "66762272768"
+                os: Linux-6.17.0-23-generic-x86_64-with-glibc2.39
+                program: /home/nicolas/Documents/Detection_Anomalie_polSAR/test_wandb.py
+                python: CPython 3.12.3
+                root: /home/nicolas/Documents/Detection_Anomalie_polSAR
+                startedAt: "2026-05-07T08:12:37.152248Z"
+                writerId: t1jrguoybscd7oaiynbb874vel0c5pxi
+        m: []
+        python_version: 3.12.3
+        t:
+            "3":
+                - 2
+                - 13
+                - 16
+            "4": 3.12.3
+            "5": 0.26.1
+            "10":
+                - 21
+            "12": 0.26.1
+            "13": linux-x86_64
+architecture:
+    value: ResNet-Dummy
+batch_size:
+    value: 32
+epochs:
+    value: 10
+learning_rate:
+    value: 0.01
