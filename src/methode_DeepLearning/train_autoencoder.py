@@ -18,15 +18,22 @@ from cvnn.wandb_utils import setup_wandb, log_config_summary, log_metrics, finis
 def main():
     print("[*] Démarrage de l'entraînement de l'Autoencodeur Complexe (Hypothèse H0)...")
 
+    repo_root = Path(__file__).resolve().parents[2]
+
     # 1. Configuration des chemins et paramètres via load_config de CVNN
     if len(sys.argv) >= 2:
         config_path = sys.argv[1]
     else:
-        config_path = "configs/config.yaml"
+        config_path = str(repo_root / "configs" / "config.yaml")
         print(f"[*] Aucun fichier de configuration spécifié. Utilisation par défaut : {config_path}")
 
     config = load_config(config_path)
     set_seed(config.get("seed", 42))
+    
+    # Résolution absolue du chemin des données par rapport à la racine du projet
+    trainpath = Path(config["data"]["dataset"]["trainpath"])
+    if not trainpath.is_absolute():
+        config["data"]["dataset"]["trainpath"] = str((repo_root / trainpath).resolve())
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[*] Matériel détecté : {device}")
@@ -48,12 +55,12 @@ def main():
     model = LatentAutoEncoder(
         num_channels=in_channels,
         num_layers=model_cfg.get("num_layers", 3),
-        channels_width=model_cfg.get("channels_width", [16, 32, 64]),
+        channels_width=model_cfg.get("channels_width", 16),
         input_size=input_size,
         activation=model_cfg.get("activation", "relu"),
         upsampling_layer=model_cfg.get("upsampling_layer", "conv_transpose"),
         layer_mode=model_cfg.get("layer_mode", "complex"),
-        normalization_layer=model_cfg.get("normalization_layer", "batch_norm"),
+        normalization_layer=model_cfg.get("normalization_layer", "batch"),
         residual=model_cfg.get("residual", False),
         num_blocks=model_cfg.get("num_blocks", 1),
         latent_dim=model_cfg.get("latent_dim", 128)
