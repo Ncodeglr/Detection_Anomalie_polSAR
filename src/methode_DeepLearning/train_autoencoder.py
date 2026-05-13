@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 import torch
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import wandb
 
 # Ajout des chemins pour importer les modules du projet
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "cvnn", "src"))
@@ -12,6 +14,7 @@ from cvnn.utils import set_seed
 from cvnn.data import azimut_split
 from cvnn.models import LatentAutoEncoder
 from cvnn.train import setup_loss_optimizer
+from cvnn.schedulers import build_schedulers, step_schedulers
 from cvnn.models.utils import init_weights_mode_aware
 from cvnn.wandb_utils import setup_wandb, log_config_summary, log_metrics, finish_wandb_run
 
@@ -20,7 +23,7 @@ def main():
 
     repo_root = Path(__file__).resolve().parents[2]
 
-    # 1. Configuration des chemins et paramètres via load_config de CVNN
+    #1. Configuration des chemins et paramètres via load_config de CVNN
     if len(sys.argv) >= 2:
         config_path = sys.argv[1]
     else:
@@ -30,7 +33,7 @@ def main():
     config = load_config(config_path)
     set_seed(config.get("seed", 42))
     
-    # Résolution absolue du chemin des données par rapport à la racine du projet
+    #Résolution absolue du chemin des données par rapport à la racine du projet
     trainpath = Path(config["data"]["dataset"]["trainpath"])
     if not trainpath.is_absolute():
         config["data"]["dataset"]["trainpath"] = str((repo_root / trainpath).resolve())
@@ -38,16 +41,16 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[*] Matériel détecté : {device}")
 
-    # --- 2. Initialisation de Weights & Biases (via l'API CVNN) ---
+    #2. Initialisation de Weights & Biases (via l'API CVNN) 
     wandb_log, run_name = setup_wandb(config)
     log_config_summary(wandb_log, config)
 
-    # 3. Chargement Modulaire des Données (Dataloaders)
+    #3. Chargement Modulaire des Données (Dataloaders)
     print("[*] Chargement des données (Zone 1 pour train/valid)...")
     loaders_dict = azimut_split(config, use_cuda=torch.cuda.is_available())
-    train_loader, valid_loader, _ = loaders_dict["part1_loaders"]
+    train_loader, valid_loader, _ = loaders_dict["loader1_splits"]  # On utilise uniquement Train et Valid de la Zone 1 pour l'entraînement de l'autoencodeur
     
-    # 4. Initialisation du Modèle (LatentAutoEncoder de CVNN)
+    #4. Initialisation du Modèle (LatentAutoEncoder de CVNN)
     model_cfg = config.get("model", {})
     in_channels = config["data"].get("inferred_input_channels", 4)
     input_size = config["data"].get("inferred_input_size", config["data"]["dataset"].get("patch_size", 32))
@@ -73,13 +76,16 @@ def main():
         model, config, train_loader.dataset, device
     )
     
+    # Initialisation du scheduler défini dans config.yaml (ex: ReduceLROnPlateau)
+    warmup_scheduler, scheduler = build_schedulers(optimizer, config, len(train_loader))
+    
     epochs = config.get("training", {}).get("epochs", 50)
     best_val_loss = float('inf')
     
     # Dossier de sauvegarde du meilleur modèle
     save_dir = Path("ml_results") / (run_name if run_name else "local_run")
     save_dir.mkdir(parents=True, exist_ok=True)
-    best_model_name = "best_autoencoder.pt"
+    best_model_name = "best_weights_autoencoder.pt"
 
     # 6. Boucle d'entraînement
     for epoch in range(epochs):
@@ -133,6 +139,9 @@ def main():
                 
         avg_val_loss = val_loss / len(valid_loader)
         print(f"➡️ Bilan Epoch {epoch+1} : Train Loss = {avg_train_loss:.6f} | Val Loss = {avg_val_loss:.6f}")
+        
+        
+        step_schedulers(warmup=None, scheduler=scheduler, metric=avg_val_loss) #Mise à jour du learning rate scheduler
         
         # --- 8. Enregistrement des logs sur WandB ---
         log_metrics(wandb_log, {"loss": avg_train_loss}, step=epoch+1, prefix="training")

@@ -36,6 +36,10 @@ data:
     patch_size: 16
     patch_stride: 16
 
+    # Les clés importantes pour cette étape :
+    type: "polsar" # Indispensable pour entrer dans la boucle H-Alpha et Cameron
+    supports_full_image_reconstruction: true # La clé qui active la reconstruction
+
   batch_size: 32
   num_workers: 0
   shuffle: True
@@ -54,7 +58,7 @@ data:
 
 # --- Paramètres d'entraînement Deep Learning ---
 training:
-  epochs: 1000
+  epochs: 5
   best_model_name: "best_autoencoder.pth"
 
 loss:

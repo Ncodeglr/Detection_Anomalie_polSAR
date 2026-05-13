@@ -99,12 +99,12 @@ class SpectralEntropyCalibrator:
         np.save(path / "Train_Entropy_Scores.npy", scores)
 
 if __name__ == "__main__":
-    # 1. Setup et chargement
+    #1. Setup et chargement
     config_path = sys.argv[1] if len(sys.argv) > 1 else "configs/config.yaml"
     cfg = load_config(config_path)
     set_seed(cfg.get("seed", 42))
     
-    # Résolution absolue du chemin des données par rapport à la racine du projet
+    #Résolution absolue du chemin des données par rapport à la racine du projet
     trainpath = Path(cfg["data"]["dataset"]["trainpath"])
     if not trainpath.is_absolute():
         repo_root = Path(__file__).resolve().parents[2]
@@ -112,25 +112,25 @@ if __name__ == "__main__":
 
     print("\n[*] Chargement des données saines (H0)...")
     loaders_dict = azimut_split(cfg, use_cuda=False)
-    train_loader, valid_loader, test_loader = loaders_dict["part1_loaders"]
+    train_loader, valid_loader, test_loader = loaders_dict["loader1_splits"]
     
-    X_train = extract_features_from_loader(train_loader, desc="Extraction Train (Zone 1)")
-    X_valid = extract_features_from_loader(valid_loader, desc="Extraction Valid (Zone 1)")
-    X_test  = extract_features_from_loader(test_loader, desc="Extraction Test (Zone 1)")
+    X_train = extract_features_from_loader(train_loader, desc="Extraction features Train (Zone 1)")
+    X_valid = extract_features_from_loader(valid_loader, desc="Extraction features Valid (Zone 1)")
+    X_test  = extract_features_from_loader(test_loader, desc="Extraction features Test (Zone 1)")
 
-    # Combinaison des 3 loaders de la Zone 1
+    #Combinaison des 3 loaders de la Zone 1
     X_zone1 = np.vstack([X_train, X_valid, X_test])
     print(f"[*] Taille totale des données saines (Zone 1) : {X_zone1.shape}")
 
-    # 2. Dossier de sortie
+    #2. Dossier de sortie
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = Path("calibration_results") / f"run_{timestamp}"
     out_dir.mkdir(parents=True, exist_ok=True)
     
-    # Sauvegarde de la matrice des features pour les méthodes Machine Learning
+    #Sauvegarde de la matrice des features pour les méthodes Machine Learning
     np.save(out_dir / "X_zone1_features.npy", X_zone1)
 
-    # 3. Calibration
+    #3. Calibration
     print("\n[*] Exécution du DepthCalibrator (Stahel-Donoho)...")
     depth_calib = DepthCalibrator(dim=X_zone1.shape[1])
     d_scores = depth_calib.calibrate(X_zone1)

@@ -6,7 +6,7 @@ from typing import Union
 from torch.utils.data import DataLoader
 from sklearn.decomposition import PCA
 
-class ComplexOODDetector:
+class OODDetector:
     def __init__(self, model, device="cpu"):
         """
         Prend un modèle pré-entraîné (LatentAutoEncoder) pour faire de la détection OoD.

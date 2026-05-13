@@ -137,8 +137,8 @@ if __name__ == "__main__":
 
     print("\n[*] Chargement des zones 2.1 et 2.2 pour les tests...")
     loaders_dict = azimut_split(cfg, use_cuda=False)
-    loader_test_2_1, n_rows_2_1, n_cols_2_1 = loaders_dict["loader2_1"]
-    loader_test_2_2, n_rows_2_2, n_cols_2_2 = loaders_dict["loader2_2"]
+    loader_test_2_1, _, _ = loaders_dict["loader2_1_full"]
+    loader_test_2_2, _, _ = loaders_dict["loader2_2_full"]
 
     base_calib_dir = Path("calibration_results")
     if not base_calib_dir.exists() or not list(base_calib_dir.glob("run_*")):
@@ -163,8 +163,7 @@ if __name__ == "__main__":
     np.save(out_dir / "Pure_2_1_Depth_Scores.npy", score_depth_against_H0(X_test_pure_2_1, calib_dir))
     np.save(out_dir / "Pure_2_1_Coherence_Scores.npy", CoherenceCalibrator().compute_scores(X_test_pure_2_1))
     np.save(out_dir / "Pure_2_1_Entropy_Scores.npy", SpectralEntropyCalibrator().compute_scores(X_test_pure_2_1))
-    # Sauvegarde pour methode_MachineLearning
-    np.save(out_dir / "X_test_pure_2_1_features.npy", X_test_pure_2_1)
+    np.save(out_dir / "X_test_pure_2_1_features.npy", X_test_pure_2_1) #Sauvegarde pour methode_MachineLearning
 
     print("\n[*] Extraction des caractéristiques sur les données PURES (Zone 2.2)...")
     X_test_pure_2_2 = extract_features_from_loader(loader_test_2_2, desc="Extraction Pure 2.2")
