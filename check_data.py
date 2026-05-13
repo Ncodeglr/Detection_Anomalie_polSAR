@@ -33,8 +33,8 @@ def visualize_azimut_split(full_image: np.ndarray, x1: int, x2: int):
         plt.imshow(img_eq, cmap='gray', origin='upper')
     
     # Ajout des lignes de découpe
-    plt.axhline(y=x1, color='red', linestyle='--', linewidth=3, label=f'Coupe 1 (x1={x1})')
-    plt.axhline(y=x2, color='white', linestyle='--', linewidth=3, label=f'Coupe 2 (x2={x2})')
+    #plt.axhline(y=x1, color='red', linestyle='--', linewidth=3, label=f'Coupe 1 (x1={x1})')
+    #plt.axhline(y=x2, color='white', linestyle='--', linewidth=3, label=f'Coupe 2 (x2={x2})')
     
     # Annotations des zones
     plt.text(100, x1/2, 'ZONE 1 (Train/Valid/Test)', color='red', fontsize=14, fontweight='bold', bbox=dict(facecolor='black', alpha=0.5))

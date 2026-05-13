@@ -58,7 +58,7 @@ data:
 
 # --- Paramètres d'entraînement Deep Learning ---
 training:
-  epochs: 5
+  epochs: 2
   best_model_name: "best_autoencoder.pth"
 
 loss:
