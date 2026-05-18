@@ -26,12 +26,22 @@ model:
 # --- 2. Configuration des Données ---
 data:
   dataset:
-    name: "PolSFDataset"         # Ou "ALOS" selon l'intégration dans cvnn
+    name: "ALOSDataset"        
     trainpath: "./data/SAN_FRANCISCO_ALOS2"
     base_dir: "/home/nicolas/Documents/polSAR_Control/data"
     azimut_split_x1: 1750
-    azimut_split_x2: 3000
+    azimut_split_x2: 2900
     has_labels: False
+
+    crop_coordinates:
+      start_row: 0
+      end_row_crop: 22608
+      max_rows: 22608
+      start_col: 0
+      end_col_crop: 8080
+      max_cols: 8080
+      
+     
     
     patch_size: 16
     patch_stride: 16
@@ -52,13 +62,11 @@ data:
   
   # Pipeline de Prétraitement Modulaire
   transforms:
-    #train puis valid 
-   
     - name: "logamplitude"
 
 # --- Paramètres d'entraînement Deep Learning ---
 training:
-  epochs: 2
+  epochs: 3
   best_model_name: "best_autoencoder.pth"
 
 loss:
@@ -69,7 +77,7 @@ loss:
 optim:
   algo: "AdamW"
   params:
-    lr: 0.0005
+    lr: 0.005
     weight_decay: 0.0001
 
 scheduler:

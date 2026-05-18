@@ -19,27 +19,44 @@ def visualize_azimut_split(full_image: np.ndarray, x1: int, x2: int):
     """
     Affiche l'image radar globale avec les lignes de découpe.
     """
-    plt.figure(figsize=(10, 15))
-    
+    print("   [*] Correction de l'orientation pour l'affichage (retournement vertical)...")
+    if full_image.ndim == 3:
+        full_image_vis = full_image[:, ::-1, :]
+        H, W = full_image_vis.shape[1], full_image_vis.shape[2]
+    else:
+        full_image_vis = full_image[::-1, :]
+        H, W = full_image_vis.shape[0], full_image_vis.shape[1]
+
+    # --- CORRECTION DE L'ASPECT RATIO ---
+    # On fixe une largeur de base (ex: 12 pouces) et on calcule la hauteur proportionnellement
+    base_width = 12
+    proportional_height = base_width * (H / W)
+    plt.figure(figsize=(base_width, proportional_height))
+    # ------------------------------------
+
     # Transformation Pauli et égalisation
-    if full_image.ndim == 3 and full_image.shape[0] in [3, 4]:
-        pauli_img = pauli_transform(full_image)
+    if full_image_vis.ndim == 3 and full_image_vis.shape[0] in [3, 4]:
+        pauli_img = pauli_transform(full_image_vis)
         pauli_img, _ = equalize(pauli_img)
         display_img = pauli_img.transpose(1, 2, 0)
-        plt.imshow(display_img, origin='upper')
+        
+        # Ajout de aspect='equal' pour forcer des pixels carrés
+        plt.imshow(display_img, origin='lower', aspect='equal')
     else:
-        img_eq, _ = equalize(full_image[0:1] if full_image.ndim == 3 else full_image)
+        img_eq, _ = equalize(full_image_vis[0:1] if full_image_vis.ndim == 3 else full_image_vis)
         if img_eq.ndim == 3: img_eq = img_eq.transpose(1, 2, 0).squeeze()
-        plt.imshow(img_eq, cmap='gray', origin='upper')
+        
+        # Ajout de aspect='equal' pour forcer des pixels carrés
+        plt.imshow(img_eq, cmap='gray', origin='lower', aspect='equal')
     
     # Ajout des lignes de découpe
-    #plt.axhline(y=x1, color='red', linestyle='--', linewidth=3, label=f'Coupe 1 (x1={x1})')
-    #plt.axhline(y=x2, color='white', linestyle='--', linewidth=3, label=f'Coupe 2 (x2={x2})')
+    plt.axhline(y=H - x1, color='red', linestyle='--', linewidth=3, label=f'Coupe 1 (x1={x1})')
+    plt.axhline(y=H - x2, color='white', linestyle='--', linewidth=3, label=f'Coupe 2 (x2={x2})')
     
     # Annotations des zones
-    plt.text(100, x1/2, 'ZONE 1 (Train/Valid/Test)', color='red', fontsize=14, fontweight='bold', bbox=dict(facecolor='black', alpha=0.5))
-    plt.text(100, x1 + (x2-x1)/2, 'ZONE 2.1 (Test A)', color='white', fontsize=14, fontweight='bold', bbox=dict(facecolor='black', alpha=0.5))
-    plt.text(100, x2 + 500, 'ZONE 2.2 (Test B)', color='white', fontsize=14, fontweight='bold', bbox=dict(facecolor='black', alpha=0.5))
+    plt.text(100, H - x1/2, 'ZONE 1 (Train/Valid/Test)', color='red', fontsize=14, fontweight='bold', bbox=dict(facecolor='black', alpha=0.5))
+    plt.text(100, H - (x1 + x2)/2, 'ZONE 2.1 (Test A)', color='white', fontsize=14, fontweight='bold', bbox=dict(facecolor='black', alpha=0.5))
+    plt.text(100, (H - x2)/2, 'ZONE 2.2 (Test B)', color='white', fontsize=14, fontweight='bold', bbox=dict(facecolor='black', alpha=0.5))
     
     plt.legend()
     plt.title("Répartition des zones sur l'image Radar (SAN_FRANCISCO_ALOS2)")

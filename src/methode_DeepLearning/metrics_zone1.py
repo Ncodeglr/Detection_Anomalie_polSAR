@@ -188,8 +188,11 @@ def generate_visualizations(model, test_loader, full_loader, n_rows, n_cols, ori
             # --- CORRECTION D'ORIENTATION ICI ---
             print("   [*] Correction de l'orientation pour l'affichage (retournement vertical)...")
             original_img_vis = original_img[:, ::-1, :]
-            recon_img_vis = recon_img[:, ::-1, :]
+            recon_img_vis = recon_img
             # ------------------------------------
+
+            print(f"   [*] Dimensions de l'image originale    : {original_img_vis.shape}")
+            print(f"   [*] Dimensions de l'image reconstruite : {recon_img_vis.shape}")
 
             print("   -> Sauvegarde de pauli_zone1_complete.png")
             fig = plot_pauli_decomposition(original_img_vis, recon_img_vis)
