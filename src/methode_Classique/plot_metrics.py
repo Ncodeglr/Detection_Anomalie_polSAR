@@ -19,8 +19,7 @@ def print_evaluation_ratios(calib_dir: Path, test_dir: Path, anomalies: list, pf
     """ Calcule et affiche les ratios d'acceptation/rejet sur les Zones 2.1 et 2.2. """
     metrics_map = {
         "Depth Projection": "Depth", 
-        "Global Coherence": "Coherence", 
-        "Spectral Entropy (H)": "Entropy"
+        "Global Coherence": "Coherence"
     }
     
     for print_name, metric in metrics_map.items():
@@ -72,15 +71,17 @@ def plot_histograms(metric: str, calib_dir: Path, test_dir: Path, anomalies: lis
     plt.hist(scores_z22, label='Zone 2.2 (Pure)', color='green', **kwargs)
     
     # 3. Tracer les anomalies (Corrompues)
-    colors = ['red', 'orange', 'purple', 'brown']
+    cmap = plt.get_cmap('tab10') # Utilisation d'une palette de 10 couleurs distinctes
     for i, anomaly in enumerate(anomalies):
         scores_h1 = np.load(test_dir / f"{anomaly}_{metric}_Scores.npy")
-        plt.hist(scores_h1, label=f'Z2.2 + {anomaly}', color=colors[i % len(colors)], histtype='step', linewidth=2, density=True, bins=50)
+        # Nettoyage du nom pour la légende (ex: Zone_2_2_Part_1_Crosstalk -> Part_1_Crosstalk)
+        clean_label = anomaly.replace("Zone_2_2_", "")
+        plt.hist(scores_h1, label=f'{clean_label}', color=cmap(i % 10), histtype='step', linewidth=2, density=True, bins=50)
         
     plt.title(f"Distribution de la métrique : {metric}")
     plt.xlabel("Score Brut")
     plt.ylabel("Densité")
-    plt.legend()
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left') # Déplace la légende à l'extérieur
     plt.grid(alpha=0.3)
     plt.tight_layout()
     plt.savefig(test_dir / f"Distributions_{metric}.png")
@@ -116,7 +117,7 @@ if __name__ == "__main__":
 
     # 1. Tracer les histogrammes
     print("\n[*] Génération des histogrammes de distribution...")
-    for metric in ["Depth", "Coherence", "Entropy"]:
+    for metric in ["Depth", "Coherence"]:
         plot_histograms(metric, calib_dir, test_dir, anomalies)
         
     print(f"\n[+] Terminé ! Les graphiques ont été sauvegardés dans le dossier '{test_dir}/'.")

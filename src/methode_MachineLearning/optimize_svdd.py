@@ -27,7 +27,8 @@ def main():
         anomaly_name = a_file.name.replace("X_", "").replace("_features.npy", "")
         anomalies_dict[anomaly_name] = np.load(a_file)
         
-    print(f"[*] Anomalies trouvées pour l'évaluation : {list(anomalies_dict.keys())}")
+    clean_names = [k.replace("Zone_2_2_", "") for k in anomalies_dict.keys()]
+    print(f"[*] Anomalies trouvées pour l'évaluation : {clean_names}")
 
     print("[*] Normalisation des données (StandardScaler)...")
     scaler = StandardScaler()

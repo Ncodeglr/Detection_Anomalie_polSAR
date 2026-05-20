@@ -131,30 +131,34 @@ def train_svdd_complex_simple2(X, C=0.1, kernel='linear', gamma=1.0, verbose=Fal
         'K': K
     }
 
-def score_svdd_batched(model, X_test):
+def score_svdd_batched(model, X_test, chunk_size=10000):
     """
     Version vectorisée (rapide) pour évaluer un grand nombre d'images de Test d'un coup.
+    Traite les données par lots (chunks) pour éviter de saturer la RAM.
     Retourne la distance^2 au centre (plus c'est grand, plus c'est une anomalie).
     """
     alpha = model['alpha']
     K_train = model['K']
     X_train = model['X_train']
     
-    # 1. Calcul du noyau entre le Test et le Train
-    K_vec = kernel_matrix(X_test, kernel=model['kernel'], gamma=model['gamma'])
-    if model['kernel'] in ['rbf', 'rbf_complex']:
-        # Pour le RBF, on reconstruit K(X_test, X_train) complet
-        XX = np.sum(np.abs(X_test)**2, axis=1)[:, None]
-        YY = np.sum(np.abs(X_train)**2, axis=1)[None, :]
-        XY = np.real(X_test @ X_train.conj().T)
-        K_vec = np.exp(-model['gamma'] * (XX + YY - 2 * XY))
-        k_xx = 1.0 # Le RBF d'un point avec lui même fait 1
-    else:
+    if model['kernel'] not in ['rbf', 'rbf_complex']:
         raise NotImplementedError("Pour l'instant batched scoring est opti pour RBF.")
         
-    term1 = k_xx
-    term2 = -2.0 * np.real(K_vec @ alpha)
-    term3 = np.real(alpha @ (K_train @ alpha))
+    n_samples = X_test.shape[0]
+    dist2 = np.zeros(n_samples)
     
-    dist2 = term1 + term2 + term3
-    return np.array(dist2).flatten()
+    term3 = np.real(alpha @ (K_train @ alpha))
+    YY = np.sum(np.abs(X_train)**2, axis=1)[None, :]
+    
+    for i in range(0, n_samples, chunk_size):
+        X_chunk = X_test[i:i+chunk_size]
+        XX = np.sum(np.abs(X_chunk)**2, axis=1)[:, None]
+        XY = np.real(X_chunk @ X_train.conj().T)
+        K_vec = np.exp(-model['gamma'] * (XX + YY - 2 * XY))
+        
+        term1 = 1.0 # Le RBF d'un point avec lui même fait 1
+        term2 = -2.0 * np.real(K_vec @ alpha)
+        
+        dist2[i:i+chunk_size] = term1 + term2 + term3
+        
+    return dist2

@@ -29,8 +29,8 @@ data:
     name: "ALOSDataset"        
     trainpath: "./data/SAN_FRANCISCO_ALOS2"
     base_dir: "/home/nicolas/Documents/polSAR_Control/data"
-    azimut_split_x1: 1750
-    azimut_split_x2: 2900
+    azimut_split_x1: 10000
+    azimut_split_x2: 15000
     has_labels: False
 
     crop_coordinates:
@@ -66,7 +66,7 @@ data:
 
 # --- Paramètres d'entraînement Deep Learning ---
 training:
-  epochs: 3
+  epochs: 1000
   best_model_name: "best_autoencoder.pth"
 
 loss:
@@ -77,14 +77,14 @@ loss:
 optim:
   algo: "AdamW"
   params:
-    lr: 0.005
+    lr: 0.0005
     weight_decay: 0.0001
 
 scheduler:
   name: "ReduceLROnPlateau"
   params:
     mode: "min"
-    factor: 0.5
+    factor: 0.9
     patience: 5
     min_lr: 0.00001
 

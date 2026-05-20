@@ -95,6 +95,7 @@ def compute_and_save_metrics(model, test_loader, full_loader, n_rows, n_cols, co
         original_img = revert_transforms(original_img, config)
         recon_img = revert_transforms(recon_img, config)
 
+        
         print("\n[*] Calcul des erreurs de reconstruction physiques...")
         recon_errors = compute_reconstruction_errors(original=original_img, reconstructed=recon_img, cfg=config)
         
@@ -185,9 +186,8 @@ def generate_visualizations(model, test_loader, full_loader, n_rows, n_cols, ori
         # Décompositions PolSAR
         if config["data"].get("type", "").lower() == "polsar":
             
-            # --- CORRECTION D'ORIENTATION ICI ---
             print("   [*] Correction de l'orientation pour l'affichage (retournement vertical)...")
-            original_img_vis = original_img[:, ::-1, :]
+            original_img_vis = original_img
             recon_img_vis = recon_img
             # ------------------------------------
 

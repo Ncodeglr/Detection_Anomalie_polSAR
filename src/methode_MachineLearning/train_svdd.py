@@ -112,9 +112,10 @@ def main():
     plt.hist(scores_z21, label='Zone 2.1 (Saine)', color='cyan', **kwargs)
     plt.hist(scores_z22, label='Zone 2.2 (Pure)', color='green', **kwargs)
     
-    colors = ['red', 'orange', 'purple', 'brown']
+    cmap = plt.get_cmap('tab10')
     for i, (anom_name, anom_scores) in enumerate(anomaly_scores_dict.items()):
-        plt.hist(anom_scores, label=f'Z2.2 + {anom_name}', color=colors[i % len(colors)], histtype='step', linewidth=2, density=True, bins=50)
+        clean_label = anom_name.replace("Zone_2_2_", "")
+        plt.hist(anom_scores, label=f'{clean_label}', color=cmap(i % 10), histtype='step', linewidth=2, density=True, bins=50)
         
     plt.axvline(x=threshold, color='black', linestyle='--', linewidth=2, label=f'Seuil (PFA={pfa*100:.0f}%)')
     plt.title("Distribution des scores SVDD (Distances au centre)")

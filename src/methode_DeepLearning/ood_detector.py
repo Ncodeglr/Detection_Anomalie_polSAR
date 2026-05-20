@@ -5,8 +5,9 @@ import numpy as np
 from typing import Union
 from torch.utils.data import DataLoader
 from sklearn.decomposition import PCA
+from torchcvnn.nn.modules import ComplexMSELoss
 
-class OODDetector:
+class OOD_Detector:
     def __init__(self, model, device="cpu"):
         """
         Prend un modèle pré-entraîné (LatentAutoEncoder) pour faire de la détection OoD.
@@ -23,6 +24,9 @@ class OODDetector:
         # Seuil calibré
         self.threshold_recon = None
         self.threshold_latent = None
+        
+        # Fonction de perte native CVNN pour l'erreur de reconstruction
+        self.recon_loss_fn = ComplexMSELoss(reduction='none')
 
     def _extract_real_latent(self, x):
         """
@@ -76,9 +80,9 @@ class OODDetector:
         x = x.to(self.device)
         
         with torch.no_grad():
-            # 1. Score de reconstruction (MSE)
+            # 1. Score de reconstruction (MSE Complexe de cvnn)
             x_hat = self.model(x)
-            recon_dist = torch.mean(torch.abs(x - x_hat)**2, dim=list(range(1, x.ndim)))
+            recon_dist = self.recon_loss_fn(x_hat, x).mean(dim=list(range(1, x.ndim)))
             
             # 2. Score latent (Mahalanobis)
             z_real = self._extract_real_latent(x).cpu().numpy()
@@ -107,8 +111,8 @@ class OODDetector:
         all_recon = np.concatenate(all_recon)
         all_mah = np.concatenate(all_mah)
         
-        # Calibrage aux quantiles
-        self.threshold_recon = np.quantile(all_recon, 1 - pfa)
+        #La fonction np.quantile(donnees, quantile) de NumPy cherche la valeur dans le tableau donnees en dessous de laquelle se trouve un certain pourcentage des données. Ici, le quantile demandé est 1 - pfa
+        self.threshold_recon = np.quantile(all_recon, 1 - pfa) 
         self.threshold_latent = np.quantile(all_mah, 1 - pfa)
         
         return self.threshold_recon, self.threshold_latent
@@ -125,7 +129,7 @@ class OODDetector:
         all_preds_mah, all_scores_mah = [], []
         
         for batch in test_loader:
-            x = batch[0] if isinstance(batch, (list, tuple)) else batch
+            x = batch[0] if isinstance(batch, (list, tuple)) else batch #On vérifie si la variable batch est une liste ou un tuple. Si c'est le cas, on suppose que les données d'entrée sont dans la première position (index 0) et on les extrait. Sinon, on considère que batch lui-même contient directement les données d'entrée.
             x = x.to(self.device)
                 
             # Calcul des scores bruts
@@ -135,7 +139,13 @@ class OODDetector:
             score_recon = recon / self.threshold_recon
             score_mah = mah / self.threshold_latent
             
-            # Décision (1 = Anomalie / OoD, 0 = Normal)
+            #La Normalisation par le seuil permet d'obtenir un score adimensionnel où :
+            # 1 correspond au seuil de détection. Ainsi, un score supérieur à 1 indique une anomalie détectée, tandis qu'un score inférieur ou égal à 1 indique une observation considérée comme normale.
+            # Si S(x) = 0.5 : L'erreur représente 50% de la tolérance maximale. La donnée est saine.
+            # Si S(x) = 1.0 : L'erreur atteint le seuil de tolérance. La donnée est à la limite entre sain et anormal.
+            # Si S(x) = 1.5 : L'erreur dépasse de 50% le seuil de tolérance. La donnée est considérée comme anormale.
+            
+            # Décision (S(x) > 1  Anomalie / OoD, S(x) = 0 ou <1 alors Normal)
             all_preds_recon.append((score_recon > 1.0).astype(int))
             all_scores_recon.append(score_recon)
             
