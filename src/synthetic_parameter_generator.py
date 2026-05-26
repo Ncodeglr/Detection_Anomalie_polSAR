@@ -1,39 +1,73 @@
 import torch 
 import math
-from typing import Optional, List
-
-# On tire le delta d'une distribution elliptique non circulaire pour simuler des anomalies plus réalistes
+from typing import Optional
+from torch.distributions.von_mises import VonMises
 
 class SyntheticParameterGenerator:
     """
-    Générateur de paramètres synthétiques complexes pour les anomalies (Crosstalk, Gain).
+    Générateur de paramètres synthétiques.
+    L'amplitude suit une loi normale centrée sur une valeur en dB.
+    La phase suit une distribution de Von Mises.
     """
-    def __init__(self, delta: float, angle_rad: float = math.pi / 4):
-        self.var_real = (1.0 + delta) / 2.0
-        self.var_imag = (1.0 - delta) / 2.0
-        self.rotation_factor = torch.exp(torch.tensor(1j * angle_rad))
+    def __init__(self, 
+                 mean_db: float = -30.0, 
+                 std_dev_amp: float = 0.005,
+                 phase_mean_rad: float = math.pi / 4,  # loc (ex: 45 degrés)
+                 phase_concentration: float = 5.0):    # kappa
         
-    def __call__(self, scales: List[float] = [1.0, 0.1, 0.6], seed: Optional[int] = None) -> torch.Tensor:
+        # --- Paramètres Amplitude ---
+        self.mean_db = mean_db
+        self.mean_linear = 10 ** (self.mean_db / 20.0) #Conversion pour ne pas être en dB
+        self.std_dev_amp = std_dev_amp
+        
+        # --- Paramètres Phase (Von Mises) - PyTorch requiert que les paramètres de la distribution soient des tenseurs
+        self.phase_loc = torch.tensor([phase_mean_rad])
+        self.phase_kappa = torch.tensor([phase_concentration])
+        
+    def __call__(self, num_samples: int = 3, seed: Optional[int] = None) -> torch.Tensor:
         if seed is not None:
             torch.manual_seed(seed)
             
-        # 1. Génération de l'ellipse de base
-        real_part = torch.randn(1) * math.sqrt(self.var_real)
-        imag_part = torch.randn(1) * math.sqrt(self.var_imag)
-        base_complex = torch.complex(real_part, imag_part)
+        # 1. Tirage des amplitudes (Loi Normale)
+        amplitudes = torch.randn(num_samples) * self.std_dev_amp + self.mean_linear
+        amplitudes = torch.clamp(amplitudes, min=0.0) # On s'assure que les amplitudes restent positives (physiquement cohérent)
         
-        # 2. Génération des variantes dynamiquement
-        variantes = []
-        for scale in scales:
-            if scale == 1.0:
-                val = base_complex
-            else:
-                # Relation linéaire en amplitude, avec la phase randomisée
-                val = torch.complex(base_complex.real * scale, torch.randn(1) * math.sqrt(self.var_imag))
-            
-            # Rotation dans le plan complexe
-            val *= self.rotation_factor
-            variantes.append(val)
-            
-        # 3. Empilement des données dans un tenseur final
-        return torch.cat(variantes, dim=0)
+        # 2. Tirage des phases (Distribution de Von Mises)
+        von_mises_dist = VonMises(self.phase_loc, self.phase_kappa)
+        # sample() renvoie une shape [num_samples, 1] à cause des tenseurs d'init, on utilise squeeze()
+        phases = von_mises_dist.sample((num_samples,)).squeeze()
+        
+        # 3. Création du tenseur complexe à partir des coordonnées polaires
+        return torch.polar(amplitudes, phases)
+
+if __name__ == "__main__":
+    # 1. Instanciation
+    # On cible une phase moyenne de 45° (pi/4) avec une concentration de 10 (assez resserrée)
+    generator = SyntheticParameterGenerator(
+        mean_db=-15.0, 
+        std_dev_amp=0.01,
+        phase_mean_rad=0.0,
+        phase_concentration=1e-5
+    )
+    
+    # 2. Génération de 50 valeurs pour bien voir l'effet de groupe de Von Mises
+    num_valeurs = 3
+    complex_tensor = generator(num_samples=num_valeurs, seed=1234)
+    
+    # 3. Calcul de l'amplitude et de la phase
+    amplitudes = torch.abs(complex_tensor)
+    phases_rad = torch.angle(complex_tensor)
+    phases_deg = torch.rad2deg(phases_rad)
+
+    # 4. Affichage dans la console des 3 premières valeurs
+    print(f"--- Objectif : Amplitude de -30 dB et Phase autour de 45° ---")
+    print("\nDétail des 3 premiers échantillons :")
+    for i in range(3):
+        amp = amplitudes[i].item()
+        p_deg = phases_deg[i].item()
+        p_rad = phases_rad[i].item()
+        real_part = complex_tensor[i].real.item()
+        imag_part = complex_tensor[i].imag.item()
+        print(f"Échantillon {i+1} : Amplitude = {amp:.4f} | Phase = {p_deg:>7.2f}° ({p_rad:>6.3f} rad) | Réel = {real_part:>7.4f} | Imag = {imag_part:>7.4f}")
+
+    

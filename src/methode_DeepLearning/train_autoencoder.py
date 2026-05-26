@@ -12,7 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "cvnn", "src
 from cvnn.config import load_config
 from cvnn.utils import set_seed
 from cvnn.data import azimut_split
-from cvnn.models import LatentAutoEncoder
+from cvnn.models import LatentAutoEncoder, AutoEncoder
 from cvnn.train import setup_loss_optimizer
 from cvnn.schedulers import build_schedulers, step_schedulers
 from cvnn.models.utils import init_weights_mode_aware
@@ -55,7 +55,7 @@ def main():
     in_channels = config["data"].get("inferred_input_channels", 4)
     input_size = config["data"].get("inferred_input_size", config["data"]["dataset"].get("patch_size", 32))
     
-    model = LatentAutoEncoder(
+    model = AutoEncoder(
         num_channels=in_channels,
         num_layers=model_cfg.get("num_layers", 3),
         channels_width=model_cfg.get("channels_width", 16),

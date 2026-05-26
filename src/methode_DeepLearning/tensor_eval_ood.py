@@ -19,7 +19,7 @@ from cvnn.data import azimut_split, get_full_image_dataloader
 from cvnn.models import LatentAutoEncoder, AutoEncoder
 from cvnn.visualize import plot_latent_space, plot_reconstructions
 
-from ood_detector import OOD_Detector
+from tensor_ood_detector import Tensor_OOD_Detector
 from anomalies import Crosstalk, ChannelGainImbalance
 from synthetic_parameter_generator import SyntheticParameterGenerator
 
@@ -30,7 +30,7 @@ def evaluate_ood_system(model, loader1_train, loader1_valid, loader2_1, final_lo
     print("--- Initialisation du Détecteur OoD ---")
     ood_metrics = {"pfa_target": pfa_target}
     
-    detector = OOD_Detector(model, device=device)
+    detector = Tensor_OOD_Detector(model, device=device)
     
     # 1. Modélisation de l'espace latent normal
     print("1. Calcul de la distribution de Mahalanobis (sur Train Sain)...")

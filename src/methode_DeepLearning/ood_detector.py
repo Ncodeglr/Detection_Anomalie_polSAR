@@ -36,7 +36,7 @@ class OOD_Detector:
             # Extraction du latent via la fonction corrigée du modèle
             z = self.model.get_latent(x)
             
-            z_flat = z.view(z.shape[0], -1)
+            z_flat = z.view(z.shape[0], -1) # Aplatit tout sauf la dimension batch
             z_real = torch.cat([z_flat.real, z_flat.imag], dim=1)
             
         return z_real

@@ -7,7 +7,7 @@ def get_anomaly_score(scores: np.ndarray, metric_name: str) -> np.ndarray:
     """ 
     Convertit les métriques brutes en 'Scores d'Anomalie' (Plus c'est élevé, plus c'est anormal).
     """
-    if metric_name == "Depth":
+    if metric_name in ["Depth"]:
         return 1.0 - scores  # Profondeur faible = anomalie
     elif metric_name == "Coherence":
         return -scores       # Cohérence faible = anomalie
@@ -43,6 +43,16 @@ def print_evaluation_ratios(calib_dir: Path, test_dir: Path, anomalies: list, pf
         print(f"   ↳ Acceptées : {acceptes:5d} / {total} ({100.0*acceptes/total:6.2f}%) | ✅ Vrais Négatifs")
         print(f"   ↳ Rejetées  : {rejetes:5d} / {total} ({100.0*rejetes/total:6.2f}%) | ❌ Fausses Alarmes")
         
+        # --- Évaluation Zone 2.2 (Saine globale) ---
+        scores_z22 = np.load(test_dir / f"Pure_2_2_{metric}_Scores.npy")
+        y_score_z22 = get_anomaly_score(scores_z22, metric)
+        total_22 = len(y_score_z22)
+        rejetes_22 = int(np.sum(y_score_z22 > threshold))
+        acceptes_22 = total_22 - rejetes_22
+        print(f"\n   [Zone 2.2 - Saine (Pure Globale)]")
+        print(f"   ↳ Acceptées : {acceptes_22:5d} / {total_22} ({100.0*acceptes_22/total_22:6.2f}%) | ✅ Vrais Négatifs")
+        print(f"   ↳ Rejetées  : {rejetes_22:5d} / {total_22} ({100.0*rejetes_22/total_22:6.2f}%) | ❌ Fausses Alarmes")
+
         # --- Évaluation Zone 2.2 (Anomalies) ---
         for anomaly in anomalies:
             scores_h1 = np.load(test_dir / f"{anomaly}_{metric}_Scores.npy")

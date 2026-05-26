@@ -2,6 +2,7 @@ import sys
 import os
 import copy
 import torch
+import math 
 import datetime
 import numpy as np
 from pathlib import Path
@@ -142,22 +143,41 @@ if __name__ == "__main__":
     # ==============================================================================
     print("\n[*] Génération des anomalies (Crosstalk et Gain testés distinctement sur chaque sous-zone)...")
     
-    delta_generator = SyntheticParameterGenerator(delta=0.8)
-    g_generator = SyntheticParameterGenerator(delta=0.5)
-    
+    # 1. Instanciation avec les nouveaux paramètres
+    # Pour "delta" : par exemple une amplitude à -30 dB et une phase concentrée autour de 45°
+    delta_generator = SyntheticParameterGenerator(
+        mean_db=-15.0,                # Niveau typique de cross-talk cité dans l'article
+        std_dev_amp=0.01,               # Légère variation
+        phase_mean_rad=0.0,           # Peu importe si le kappa est à 0
+        phase_concentration=1e-5       # Kappa = 0 donne une phase aléatoire uniforme (typiques des bruits de couplage)
+    )
+
+    # Pour "g" : par exemple une amplitude légèrement différente (-25 dB) 
+    # ou une dispersion de phase plus large (kappa plus faible) pour simuler un comportement différent
+    g_generator = SyntheticParameterGenerator(
+        mean_db=0.0,                  # Le gain est proche de 1 (0 dB)
+        std_dev_amp=0.01,             # Faible variation pour que |g|^4 reste < 0.5 dB
+        phase_mean_rad=0.0,           # Pas de déphasage massif par défaut
+        phase_concentration=10.0
+    )
+
     # Utilisation d'une seed fixe pour la reproductibilité entre les méthodes
     anomaly_seed = cfg.get("anomaly_seed", 1234)
-    
-    delta_values = delta_generator(seed=anomaly_seed)
-    g_values = g_generator(seed=anomaly_seed + 1) # Seed différente pour s'assurer que g et delta ne sont pas identiques
 
+    # 2. Génération des valeurs
+    nombre_echantillons = 3
+
+    delta_values = delta_generator(num_samples=nombre_echantillons, seed=anomaly_seed)
+    g_values = g_generator(num_samples=nombre_echantillons, seed=anomaly_seed + 1)
+    
+    
     final_anomaly_definitions = []
     for i in range(3):
         crosstalk_anomaly = Crosstalk(delta=delta_values[i].item())
         gain_anomaly = ChannelGainImbalance(g=g_values[i].item())
         final_anomaly_definitions.extend([crosstalk_anomaly, gain_anomaly])
-        print(f"   - Anomalies pour sous-zone {i+1}: Crosstalk (delta={crosstalk_anomaly.delta:.3f}) et Gain (g={gain_anomaly.g:.3f})")
-
+        print(f"   - Anomalies pour sous-zone {i+1}: Crosstalk (delta={crosstalk_anomaly.delta}) et Gain (g={gain_anomaly.g})")
+    
     final_loaders_to_test = []
     for loader in loaders_2_2_parts:
         final_loaders_to_test.extend([loader, loader])
