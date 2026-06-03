@@ -1,0 +1,75 @@
+# Configuration globale pour le pipeline de Détection d'Anomalies PolSAR
+# Approche Deep Learning (Unet Complexe)
+
+seed: 42
+task: "segmentation"
+
+# --- 1. Architecture du Modèle ---
+model:
+  name: "ComplexUnet"
+  num_channels: 4
+  num_layers: 3
+  channels_width: 32
+  input_size: int,
+  activation: "CReLU" 
+  num_classes: 7 # 6 labels + 1 label de fond
+  num_blocks: 1
+  layer_mode: "complex"
+  normalization_layer: "batch"
+  downsampling_layer: "maxpool"
+  upsampling_layer: "nearest"
+  residual: True
+  projection_layer: "amplitude"
+  projection_config: None
+  dropout: 0.0
+  gumbel_softmax: None
+  
+  # Paramètres requis pour basculer sur un VAE (setup_loss_optimizer)
+  decoder_variance:
+    learned_variance: false
+    min_log_sigma: -20.0
+
+# --- 2. Configuration des Données ---
+data:
+  dataset:
+    name: PolSFDataset
+    trainpath: "./data/PolSF
+  batch_size: 32
+  patch_size: 16
+  patch_stride: 16
+  num_workers: 2
+  valid_ratio: 0.1
+  test_ratio: 0.1
+
+# --- 3. Type de loss ---
+loss:
+  name: CrossEntropyLoss
+
+# --- 4. Nombre d'epochs ---
+epochs: 5
+
+# --- 5. Optimisation et Scheduler ---
+
+# Optimizer configuration
+optim:
+  algo: AdamW
+  params:
+    lr: 0.0005 # Reduced from 0.0005 for more stable training
+    weight_decay: 0.001 # Increased weight decay for better regularization
+    betas: [0.9, 0.999]
+
+# Scheduler configuration with ReduceLROnPlateau for adaptive learning
+scheduler:
+  name: ReduceLROnPlateau
+  params:
+    mode: min
+    factor: 0.5
+    patience: 5
+    min_lr: 0.000001
+
+
+
+# --- Suivi des Expériences avec Wandb ---
+logging:
+  wandb:
+    project: "polSAR-anomaly-detection-DL"

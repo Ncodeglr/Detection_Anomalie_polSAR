@@ -41,8 +41,6 @@ data:
       end_col_crop: 8080
       max_cols: 8080
       
-     
-    
     patch_size: 16
     patch_stride: 16
 
