@@ -71,7 +71,7 @@ def main():
     
     init_weights_mode_aware(model, model_cfg.get("layer_mode", "complex"))
     
-    # 5. Setup de la Loss et de l'Optimiseur (API CVNN)
+    #5. Setup de la Loss et de l'Optimiseur (repository CVNN)
     loss_fn, optimizer = setup_loss_optimizer(
         model, config, train_loader.dataset, device
     )
@@ -87,7 +87,7 @@ def main():
     save_dir.mkdir(parents=True, exist_ok=True)
     best_model_name = "best_weights_autoencoder.pt"
 
-    # 6. Boucle d'entraînement
+    #6. Training Loop
     for epoch in range(epochs):
         model.train()
         train_loss = 0.0

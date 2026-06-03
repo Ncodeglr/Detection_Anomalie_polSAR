@@ -67,8 +67,19 @@ class Tensor_OOD_Detector:
         
         with torch.no_grad():
             # 1. Score de reconstruction (MSE Complexe de cvnn)
-            x_hat = self.model(x)
-            recon_dist = self.recon_loss_fn(x_hat, x).mean(dim=list(range(1, x.ndim)))
+            outputs = self.model(x)
+            if isinstance(outputs, (tuple, list)):
+                x_hat = outputs[0]
+            else:
+                x_hat = outputs
+                
+            # Attention : Si x_hat et x n'ont pas le même nombre de canaux,
+            # cette ligne crashera ou ne fera pas une MSE pertinente.
+            if x_hat.shape == x.shape:
+                recon_dist = self.recon_loss_fn(x_hat, x).mean(dim=list(range(1, x.ndim)))
+            else:
+                # Fallback : on met l'erreur de reconstruction à zéro si le modèle fait de la classification
+                recon_dist = torch.zeros(x.shape[0], device=x.device)
             
             # 2. Score latent spatial (Mahalanobis)
             z = self.extract_latent(x) # [B, H, W, C]

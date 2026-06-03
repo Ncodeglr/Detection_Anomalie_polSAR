@@ -10,7 +10,7 @@ model:
   num_channels: 4
   num_layers: 3
   channels_width: 32
-  input_size: int,
+  input_size: 16
   activation: "CReLU" 
   num_classes: 7 # 6 labels + 1 label de fond
   num_blocks: 1
@@ -24,16 +24,12 @@ model:
   dropout: 0.0
   gumbel_softmax: None
   
-  # Paramètres requis pour basculer sur un VAE (setup_loss_optimizer)
-  decoder_variance:
-    learned_variance: false
-    min_log_sigma: -20.0
 
 # --- 2. Configuration des Données ---
 data:
   dataset:
     name: PolSFDataset
-    trainpath: "./data/PolSF
+    trainpath: "./data/PolSF"
   batch_size: 32
   patch_size: 16
   patch_stride: 16
@@ -43,10 +39,16 @@ data:
 
 # --- 3. Type de loss ---
 loss:
-  name: CrossEntropyLoss
+  name: "FocalLoss"
+  use_class_weights: true
+  weight_mode: "balanced"
+  gamma: 2.0
+  ignore_index : 0    
+
+
 
 # --- 4. Nombre d'epochs ---
-epochs: 5
+epochs: 20
 
 # --- 5. Optimisation et Scheduler ---
 
