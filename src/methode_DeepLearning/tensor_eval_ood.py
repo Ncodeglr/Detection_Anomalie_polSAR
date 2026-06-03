@@ -20,7 +20,7 @@ from cvnn.models import LatentAutoEncoder, AutoEncoder
 from cvnn.visualize import plot_latent_space, plot_reconstructions
 
 from tensor_ood_detector import Tensor_OOD_Detector
-from anomalies import Crosstalk, ChannelGainImbalance
+from anomalies import Crosstalk
 from synthetic_parameter_generator import SyntheticParameterGenerator
 
 def evaluate_ood_system(model, loader1_train, loader1_valid, loader2_1, final_loaders_to_test, anomaly_definitions, pfa_target=0.05, device="cpu", out_dir=Path(".")):
@@ -195,7 +195,7 @@ def main():
         print(f"   - Sous-zone {i+1} créée ({col_split_points[i]} -> {col_split_points[i+1]}) avec {len(loader.dataset)} patchs.")
 
     # --- Génération des anomalies pour chaque sous-zone (appliquées séparément) ---
-    print("[*] Génération des anomalies (Crosstalk et Gain testés distinctement sur chaque sous-zone)...")
+    print("[*] Génération des anomalies (Crosstalk testé distinctement sur chaque sous-zone)...")
     
     # 1. Instanciation avec les nouveaux paramètres
     # Pour "delta" : par exemple une amplitude à -30 dB et une phase concentrée autour de 45°
@@ -206,35 +206,17 @@ def main():
         phase_concentration=1e-5       # Kappa = 0 donne une phase aléatoire uniforme (typiques des bruits de couplage)
     )
 
-    # Pour "g" : par exemple une amplitude légèrement différente (-25 dB) 
-    # ou une dispersion de phase plus large (kappa plus faible) pour simuler un comportement différent
-    g_generator = SyntheticParameterGenerator(
-        mean_db=0.0,                  # Le gain est proche de 1 (0 dB)
-        std_dev_amp=0.01,             # Faible variation pour que |g|^4 reste < 0.5 dB
-        phase_mean_rad=0.0,           # Pas de déphasage massif par défaut
-        phase_concentration=50.0
-    )
-
     # 2. Génération des valeurs
     nombre_echantillons = 3
 
     delta_values = delta_generator(num_samples=nombre_echantillons, seed=1234)
-    g_values = g_generator(num_samples=nombre_echantillons, seed=1234 + 1)
     
-    # On crée une liste de 6 anomalies: [Crosstalk_z1, Gain_z1, Crosstalk_z2, Gain_z2, ...]
     final_anomaly_definitions = []
     for i in range(3):
         # Création sur CPU (sans .to(device)) pour accélérer le traitement du DataLoader
         crosstalk_anomaly = Crosstalk(delta=delta_values[i].item())
-        gain_anomaly = ChannelGainImbalance(g=g_values[i].item())
-        final_anomaly_definitions.extend([crosstalk_anomaly, gain_anomaly])
-        print(f"   - Anomalies pour sous-zone {i+1}: Crosstalk (delta={crosstalk_anomaly.delta:.3f}) et Gain (g={gain_anomaly.g:.3f})")
-
-    # On duplique les loaders pour correspondre: [loader_z1, loader_z1, loader_z2, loader_z2, ...]
-    final_loaders_to_test = []
-    for loader in loaders_2_2_parts:
-        final_loaders_to_test.extend([loader, loader])
-    
+        final_anomaly_definitions.append(crosstalk_anomaly)
+        print(f"   - Anomalies pour sous-zone {i+1}: Crosstalk (delta={crosstalk_anomaly.delta:.3f})")
     
     # 2. Initialisation et chargement du Modèle
     print("[*] Chargement du modèle pré-entraîné...")
@@ -281,7 +263,7 @@ def main():
 
     #3. Lancement de l'évaluation
     evaluate_ood_system(model, loader1_train, loader1_valid, loader_2_1, 
-                        final_loaders_to_test, final_anomaly_definitions, pfa_target=0.05, device=device, out_dir=latest_run_dir)
+                        loaders_2_2_parts, final_anomaly_definitions, pfa_target=0.05, device=device, out_dir=latest_run_dir)
 
 if __name__ == "__main__":
     main()

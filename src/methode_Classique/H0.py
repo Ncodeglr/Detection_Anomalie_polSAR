@@ -53,14 +53,3 @@ class DepthCalibrator:
         max_deviations = np.max(abs_diff / self.mads, axis=1)
         return 1.0 / (1.0 + max_deviations)
 
-class CoherenceCalibrator:
-    """ Gère le calcul de la cohérence globale (somme des modules gamma). """
-    def compute_scores(self, X_train):
-        # On ne prend que les 12 premières colonnes (index 0 à 11)
-        X_complex_parts = X_train[:, :12].reshape(-1, 6, 2) 
-        modules = np.sqrt(np.sum(X_complex_parts**2, axis=2))
-        return np.sum(modules, axis=1)
-
-    def save(self, path: Path, scores):
-        np.save(path / "Train_Coherence_Scores.npy", scores)
-

@@ -9,18 +9,11 @@ def get_anomaly_score(scores: np.ndarray, metric_name: str) -> np.ndarray:
     """
     if metric_name in ["Depth"]:
         return 1.0 - scores  # Profondeur faible = anomalie
-    elif metric_name == "Coherence":
-        return -scores       # Cohérence faible = anomalie
-    elif metric_name == "Entropy":
-        return scores        # Entropie forte = anomalie
     return scores
 
 def print_evaluation_ratios(calib_dir: Path, test_dir: Path, anomalies: list, pfa: float = 0.05):
     """ Calcule et affiche les ratios d'acceptation/rejet sur les Zones 2.1 et 2.2. """
-    metrics_map = {
-        "Depth Projection": "Depth", 
-        "Global Coherence": "Coherence"
-    }
+    metrics_map = {"Depth Projection": "Depth"}
     
     for print_name, metric in metrics_map.items():
         # 1. Charger les scores de la Zone 1 pour définir le seuil
@@ -114,7 +107,7 @@ if __name__ == "__main__":
         
     # Détection automatique des anomalies testées en scannant les fichiers
     anomalies = []
-    for f in test_dir.glob("*_Depth_Scores.npy"):
+    for f in sorted(test_dir.glob("*_Depth_Scores.npy")):
         name = f.name.replace("_Depth_Scores.npy", "")
         if not name.startswith("Pure"):
             anomalies.append(name)
@@ -127,7 +120,7 @@ if __name__ == "__main__":
 
     # 1. Tracer les histogrammes
     print("\n[*] Génération des histogrammes de distribution...")
-    for metric in ["Depth", "Coherence"]:
+    for metric in ["Depth"]:
         plot_histograms(metric, calib_dir, test_dir, anomalies)
         
     print(f"\n[+] Terminé ! Les graphiques ont été sauvegardés dans le dossier '{test_dir}/'.")

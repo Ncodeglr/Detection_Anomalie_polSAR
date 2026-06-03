@@ -20,8 +20,8 @@ from cvnn.data import azimut_split, get_full_image_dataloader
 
 # Import depuis vos propres scripts
 from feature_extraction import compute_batched_global_covariance, extract_batched_correlation_features, extract_features_from_loader
-from H0 import CoherenceCalibrator, DepthCalibrator
-from H1 import Crosstalk, ChannelGainImbalance
+from H0 import DepthCalibrator
+from H1 import Crosstalk
 from synthetic_parameter_generator import SyntheticParameterGenerator
 
 
@@ -120,7 +120,6 @@ if __name__ == "__main__":
     
     print("[*] Calcul et sauvegarde des scores pour les données PURES 2.1...")
     np.save(out_dir / "Pure_2_1_Depth_Scores.npy", DepthCalibrator().load_and_score(X_test_pure_2_1, calib_dir))
-    np.save(out_dir / "Pure_2_1_Coherence_Scores.npy", CoherenceCalibrator().compute_scores(X_test_pure_2_1))
     np.save(out_dir / "X_test_pure_2_1_features.npy", X_test_pure_2_1) #Sauvegarde pour methode_MachineLearning
 
     print("\n[*] Extraction des caractéristiques sur les données PURES (Zone 2.2 divisée)...")
@@ -135,7 +134,6 @@ if __name__ == "__main__":
     X_test_pure_2_2 = np.vstack(X_test_pure_2_2_parts)
     print("\n[*] Calcul et sauvegarde des scores pour l'ensemble des données PURES 2.2...")
     np.save(out_dir / "Pure_2_2_Depth_Scores.npy", DepthCalibrator().load_and_score(X_test_pure_2_2, calib_dir))
-    np.save(out_dir / "Pure_2_2_Coherence_Scores.npy", CoherenceCalibrator().compute_scores(X_test_pure_2_2))
     np.save(out_dir / "X_test_pure_2_2_features.npy", X_test_pure_2_2)
 
     # ==============================================================================
@@ -152,15 +150,6 @@ if __name__ == "__main__":
         phase_concentration=1e-5       # Kappa = 0 donne une phase aléatoire uniforme (typiques des bruits de couplage)
     )
 
-    # Pour "g" : par exemple une amplitude légèrement différente (-25 dB) 
-    # ou une dispersion de phase plus large (kappa plus faible) pour simuler un comportement différent
-    g_generator = SyntheticParameterGenerator(
-        mean_db=0.0,                  # Le gain est proche de 1 (0 dB)
-        std_dev_amp=0.01,             # Faible variation pour que |g|^4 reste < 0.5 dB
-        phase_mean_rad=0.0,           # Pas de déphasage massif par défaut
-        phase_concentration=10.0
-    )
-
     # Utilisation d'une seed fixe pour la reproductibilité entre les méthodes
     anomaly_seed = cfg.get("anomaly_seed", 1234)
 
@@ -168,22 +157,15 @@ if __name__ == "__main__":
     nombre_echantillons = 3
 
     delta_values = delta_generator(num_samples=nombre_echantillons, seed=anomaly_seed)
-    g_values = g_generator(num_samples=nombre_echantillons, seed=anomaly_seed + 1)
-    
     
     final_anomaly_definitions = []
     for i in range(3):
         crosstalk_anomaly = Crosstalk(delta=delta_values[i].item())
-        gain_anomaly = ChannelGainImbalance(g=g_values[i].item())
-        final_anomaly_definitions.extend([crosstalk_anomaly, gain_anomaly])
-        print(f"   - Anomalies pour sous-zone {i+1}: Crosstalk (delta={crosstalk_anomaly.delta}) et Gain (g={gain_anomaly.g})")
-    
-    final_loaders_to_test = []
-    for loader in loaders_2_2_parts:
-        final_loaders_to_test.extend([loader, loader])
+        final_anomaly_definitions.append(crosstalk_anomaly)
+        print(f"   - Anomalies pour sous-zone {i+1}: Crosstalk (delta={crosstalk_anomaly.delta})")
 
-    for i, (loader_part, anomaly) in enumerate(zip(final_loaders_to_test, final_anomaly_definitions)):
-        zone_index = (i // 2) + 1
+    for i, (loader_part, anomaly) in enumerate(zip(loaders_2_2_parts, final_anomaly_definitions)):
+        zone_index = i + 1
         anomaly_type = anomaly.__class__.__name__
         anomaly_name = f"Zone_2_2_Part_{zone_index}"
         anomaly_log_name = f"{anomaly_name}_{anomaly_type}"
@@ -193,10 +175,8 @@ if __name__ == "__main__":
         
         # Calcul des scores d'anomalies
         depth_scores = DepthCalibrator().load_and_score(X_test_h1, calib_dir)
-        coh_scores = CoherenceCalibrator().compute_scores(X_test_h1)
         
         # Sauvegarde
         np.save(out_dir / f"{anomaly_log_name}_Depth_Scores.npy", depth_scores)
-        np.save(out_dir / f"{anomaly_log_name}_Coherence_Scores.npy", coh_scores)
         np.save(out_dir / f"X_{anomaly_log_name}_features.npy", X_test_h1)
         print(f"[+] Scores sauvegardés pour l'anomalie : {anomaly_log_name}")

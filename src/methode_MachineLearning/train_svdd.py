@@ -81,7 +81,7 @@ def main():
     
     # Recherche des anomalies dynamiquement
     latest_test_run = max([d for d in test_base.glob("run_*") if d.is_dir()], key=os.path.getmtime)
-    anomaly_files = [f for f in latest_test_run.glob("X_*_features.npy") if "pure" not in f.name]
+    anomaly_files = sorted([f for f in latest_test_run.glob("X_*_features.npy") if "pure" not in f.name])
     
     anomaly_scores_dict = {}
     for a_file in anomaly_files:

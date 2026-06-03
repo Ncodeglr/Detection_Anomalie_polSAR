@@ -12,7 +12,7 @@ from cvnn.config import load_config
 from cvnn.utils import set_seed
 from cvnn.data import azimut_split
 from feature_extraction import extract_features_from_loader
-from H0 import DepthCalibrator, CoherenceCalibrator
+from H0 import DepthCalibrator
 
 if __name__ == "__main__":
     #1. Setup et chargement
@@ -51,10 +51,5 @@ if __name__ == "__main__":
     depth_calib = DepthCalibrator(dim=X_zone1.shape[1])
     d_scores = depth_calib.calibrate(X_zone1)
     depth_calib.save(out_dir, d_scores)
-
-    print("[*] Exécution du CoherenceCalibrator...")
-    coh_calib = CoherenceCalibrator()
-    c_scores = coh_calib.compute_scores(X_zone1)
-    coh_calib.save(out_dir, c_scores)
 
     print(f"\n[+] Calibration H0 terminée avec succès. Résultats sauvés dans '{out_dir}/'")
