@@ -33,7 +33,7 @@ def main():
     config = load_config(config_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # 1. Résolution du chemin absolu de l'image ALOS2
+    #1. Résolution du chemin absolu de l'image ALOS2
     trainpath = Path(config["data"]["dataset"]["trainpath"])
     if not trainpath.is_absolute():
         config["data"]["dataset"]["trainpath"] = str((repo_root / trainpath).resolve())
@@ -50,10 +50,9 @@ def main():
     config_polsf["data"]["recompute_statistics"] = True
     
     print("\n[*] 1. Chargement de la région originelle (PolSF) pour la calibration...")
-    # get_dataloaders permet d'obtenir le train_loader et valid_loader de PolSF
-    train_loader, valid_loader, _ = get_dataloaders(config_polsf, device)
+    train_loader, valid_loader, _ = get_dataloaders(config_polsf, device) #get_dataloaders permet d'obtenir le train_loader et valid_loader de PolSF
 
-    # 3. Chargement du modèle UNet
+    #3. Chargement du modèle UNet
     print("\n[*] 2. Chargement du modèle UNet pré-entraîné...")
     model_cfg = config.get("model", {})
     data_cfg = config.get("data", {})
@@ -99,7 +98,7 @@ def main():
     thresh_mah = detector.calibrate_thresholds(valid_loader, pfa=pfa_target)
     print(f"   -> Seuil Mahalanobis    : {thresh_mah:.4f}")
 
-    # 5. Sélection de régions STRICTEMENT non vues dans l'image ALOS2 (8080 x 22608)
+    #5. Sélection de régions STRICTEMENT non vues dans l'image ALOS2 (8080 x 22608)
     # Région A (Saine) : On prend une région en dessous de PolSF
     # Pour sortir de la zone de San Francisco, on passe explicitement sur l'image maître ALOS2.
     config_unseen_sain = copy.deepcopy(config_polsf) # Hérite des statistiques fraîchement calculées
