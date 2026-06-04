@@ -29,7 +29,8 @@ model:
 data:
   dataset:
     name: PolSFDataset
-    trainpath: "./data/PolSF"
+    trainpath: "./data/SAN_FRANCISCO_ALOS2"
+    base_dir: "/home/nicolas/Documents/polSAR_Control/data"
   batch_size: 32
   patch_size: 16
   patch_stride: 16
@@ -48,7 +49,7 @@ loss:
 
 
 # --- 4. Nombre d'epochs ---
-epochs: 20
+epochs: 200
 
 # --- 5. Optimisation et Scheduler ---
 

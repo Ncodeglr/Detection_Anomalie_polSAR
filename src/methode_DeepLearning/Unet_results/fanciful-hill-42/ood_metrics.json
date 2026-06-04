@@ -1,0 +1,17 @@
+{
+    "pfa_target": 0.05,
+    "threshold_entropy": 1.2873015403747559,
+    "threshold_mah": 6.2453694343566895,
+    "Test_Sain": {
+        "pfa_entropy": 0.04638050200072754,
+        "pfa_mah": 0.04747180793015642
+    },
+    "Anomalies": {
+        "Test_Crosstalk": {
+            "detection_rate_entropy": 0.04638050200072754,
+            "detection_rate_mah": 0.04747180793015642,
+            "auc_roc_entropy": 0.5000000000000001,
+            "auc_roc_mah": 0.5
+        }
+    }
+}
