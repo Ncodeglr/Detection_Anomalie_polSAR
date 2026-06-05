@@ -63,7 +63,7 @@ def main():
         num_layers = model_cfg.get("num_layers", 3),
         channels_width = model_cfg.get("channels_width", 16),
         input_size = input_size,
-        activation = model_cfg.get("activation", "CRelu"),
+        activation = model_cfg.get("activation", "CReLU"),
         num_classes = model_cfg.get("num_classes", 7),
         num_blocks = model_cfg.get("num_blocks", 1),
         layer_mode = model_cfg.get("layer_mode", "complex"),

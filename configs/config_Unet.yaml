@@ -11,7 +11,7 @@ model:
   num_layers: 3
   channels_width: 32
   input_size: 16
-  activation: "modReLU" 
+  activation: "CReLU" 
   num_classes: 7 # 6 labels + 1 label de fond
   num_blocks: 1
   layer_mode: "complex"
@@ -31,7 +31,7 @@ data:
     name: PolSFDataset
     trainpath: "./data/SAN_FRANCISCO_ALOS2"
     base_dir: "/home/nicolas/Documents/polSAR_Control/data"
-  batch_size: 32
+  batch_size: 64
   patch_size: 16
   patch_stride: 16
   num_workers: 2
@@ -57,7 +57,7 @@ epochs: 150
 optim:
   algo: AdamW
   params:
-    lr: 0.0001 # Reduced from 0.0005 for more stable training
+    lr: 0.0005 # Reduced from 0.0005 for more stable training
     weight_decay: 0.001 # Increased weight decay for better regularization
     betas: [0.9, 0.999]
 
