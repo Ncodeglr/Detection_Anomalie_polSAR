@@ -138,6 +138,10 @@ def main():
     crosstalk_anomaly = Crosstalk(delta=delta_generator(num_samples=1, seed=42)[0].item())
     print(f"   - Crosstalk (delta={crosstalk_anomaly.delta:.3f}) injecté sur Région B")
 
+    #crosstalk_anomaly = Crosstalk(delta=0.11+0.0j)
+    #print(f"   - Crosstalk (delta={crosstalk_anomaly.delta}) injecté sur Région B")
+
+
     # Injection de l'anomalie dans le dataset "Région B"
     base_ds = loader_ano.dataset
     while hasattr(base_ds, 'dataset') or hasattr(base_ds, 'base_dataset'):
