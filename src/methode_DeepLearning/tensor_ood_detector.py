@@ -52,12 +52,11 @@ class Tensor_OOD_Detector:
         B, C_in, H, W = x.shape
         x_flat = x.view(B, C_in, -1) # [B, C_in, H*W]
         
-        
-        #Matrice de Covariance spatiale (C4)
+        #Matrice de Covariance spatiale pour chaque image du Batch
         gram = torch.bmm(x_flat, x_flat.conj().transpose(1, 2)) / (H * W) # [B, C_in, C_in]
             
-        #FEATURE 1 : SPAN (Énergie Totale)
-        span = torch.diagonal(gram.real, dim1=1, dim2=2).sum(dim=1, keepdim=True) # [B, 1] en ignorant la dimension 0 (le Batch). Pour chaque élément de ce Batch, on regarde la matrice formée par la dimension 1 (lignes) et la dimension 2 (colonnes), et on extrait la diagonale Ignore la dimension 0 (le Batch). 
+        #FEATURE 1 : SPAN (Énergie Totale) pour chaque image du Batch
+        span = torch.diagonal(gram.real, dim1=1, dim2=2).sum(dim=1, keepdim=True) # [B, 1] en ignorant la dimension 0 (le Batch). Pour chaque image du Batch, on regarde la matrice formée par la dimension 1 (lignes) et la dimension 2 (colonnes), et on extrait la diagonale, on ignore la dimension 0 (le Batch). 
 
         #FEATURE 2 : Cross-Polarization Ratio (Extrêmement sensible au Crosstalk)
         cross_pol_ratio = torch.zeros_like(span) # Init à zéro pour les cas non-PolSAR (C_in != 4)
@@ -74,12 +73,12 @@ class Tensor_OOD_Detector:
             
         #gram.real.view(B, -1) : On prend la partie réelle de la matrice $4 \times 4$ et on l'aplatit (.view(B, -1)) en un vecteur 1D. On passe de [B, 4, 4] à [B, 16] pour chaque image du batch. Chaque élément de ce vecteur représente une corrélation spatiale entre les canaux (HH-HH, HH-HV, ..., VV-VV). 
         #gram.imag.view(B, -1) : Idem pour la partie imaginaire
-        #span : Une mesur par image donc on garde la dimension [B, 1]
+        #span : Une mesure par image donc on garde la dimension [B, 1]
         #cross_pol_ratio : Une mesure par image donc on garde la dimension [B, 1]
         phys_features = torch.cat([gram.real.view(B, -1), gram.imag.view(B, -1), span, cross_pol_ratio], dim=-1) # [B, 16 (real) + 16 (imag) + 1 (span) + 1 (cross_pol)] = [B, 34]
             
         # --- 3. Concaténation (Physico-Sémantique) ---
-        return torch.cat([z_features, phys_features], dim=-1) #[32, 96 + 34]
+        return torch.cat([z_features, phys_features], dim=-1) #[32, 3*C_in + 34]
 
     def fit_mahalanobis(self, train_loader: DataLoader, eps: float = 1e-12):
         """
@@ -130,13 +129,13 @@ class Tensor_OOD_Detector:
             mah_dist = torch.sqrt(torch.relu(mah_dist_sq)) # [B]
         return mah_dist.numpy()
 
-    def calibrate_thresholds(self, pfa_loader, pfa: float):
+    def calibrate_thresholds(self, valid_loader, pfa: float):
         """
         Calibre les seuils avec les données de PFA.
         """
         all_mah = []
         
-        for batch in pfa_loader:
+        for batch in valid_loader:
             x = batch[0] if isinstance(batch, (list, tuple)) else batch
             mah = self.compute_scores(x)
             all_mah.append(mah)

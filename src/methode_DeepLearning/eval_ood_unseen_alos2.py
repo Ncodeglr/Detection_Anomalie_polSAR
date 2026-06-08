@@ -50,7 +50,7 @@ def main():
     config_polsf["data"]["recompute_statistics"] = True
     
     print("\n[*] 1. Chargement de la région originelle (PolSF) pour la calibration...")
-    train_loader, valid_loader, _ = get_dataloaders(config_polsf, device) #get_dataloaders permet d'obtenir le train_loader et valid_loader de PolSF
+    train_loader, valid_loader, _ = get_dataloaders(config_polsf, device) #On obtient le train_loader et valid_loader de PolSF
 
     #3. Chargement du modèle UNet
     print("\n[*] 2. Chargement du modèle UNet pré-entraîné...")
@@ -89,7 +89,7 @@ def main():
     model.load_state_dict(torch.load(latest_run_dir / "best_weights_unet.pt", map_location=device))
     print(f"   [+] Poids chargés depuis {latest_run_dir.name}")
 
-    # 4. Calibration du détecteur sur la zone originelle
+    #4. Calibration du détecteur sur la zone originelle
     print("\n[*] 3. Initialisation et Calibration du Détecteur OoD...")
     detector = Tensor_OOD_Detector(model, device=device)
     detector.fit_mahalanobis(train_loader)
@@ -99,8 +99,8 @@ def main():
     print(f"   -> Seuil Mahalanobis    : {thresh_mah:.4f}")
 
     #5. Sélection de régions STRICTEMENT non vues dans l'image ALOS2 (8080 x 22608)
-    # Région A (Saine) : On prend une région en dessous de PolSF
-    # Pour sortir de la zone de San Francisco, on passe explicitement sur l'image maître ALOS2.
+    
+    #Région A (Saine) : On prend une région en dessous de PolSF - Pour sortir de la zone de San Francisco, on passe explicitement sur l'image maître ALOS2.
     config_unseen_sain = copy.deepcopy(config_polsf) # Hérite des statistiques fraîchement calculées
     config_unseen_sain["data"]["dataset"]["name"] = "ALOSDataset"
     config_unseen_sain["data"]["recompute_statistics"] = False
@@ -109,7 +109,7 @@ def main():
         "start_col": 2832, "end_col": 7888      # Mêmes colonnes que PolSF
     }
     
-    # Région B (Anomalie) : On prend une région totalement décalée vers la droite
+    #Région B (Anomalie) : On prend une région totalement décalée vers la droite
     config_unseen_ano = copy.deepcopy(config_polsf) # Hérite des statistiques fraîchement calculées
     config_unseen_ano["data"]["dataset"]["name"] = "ALOSDataset"
     config_unseen_ano["data"]["recompute_statistics"] = False

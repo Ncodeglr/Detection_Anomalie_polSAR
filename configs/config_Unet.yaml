@@ -9,7 +9,7 @@ model:
   name: "ComplexUnet"
   num_channels: 4
   num_layers: 3
-  channels_width: 32
+  channels_width: 16
   input_size: 16
   activation: "CReLU" 
   num_classes: 7 # 6 labels + 1 label de fond
@@ -31,7 +31,7 @@ data:
     name: PolSFDataset
     trainpath: "./data/SAN_FRANCISCO_ALOS2"
     base_dir: "/home/nicolas/Documents/polSAR_Control/data"
-  batch_size: 64
+  batch_size: 32
   patch_size: 16
   patch_stride: 16
   num_workers: 2
