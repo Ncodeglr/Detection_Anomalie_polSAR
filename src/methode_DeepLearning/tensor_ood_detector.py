@@ -141,7 +141,6 @@ class Tensor_OOD_Detector:
             all_mah.append(mah)
             
         all_mah = np.concatenate(all_mah)
-        
         self.threshold_latent = np.quantile(all_mah, 1 - pfa)
         
         return self.threshold_latent

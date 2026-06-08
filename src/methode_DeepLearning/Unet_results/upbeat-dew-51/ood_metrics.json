@@ -1,0 +1,13 @@
+{
+    "pfa_target": 0.05,
+    "threshold_mah": 8.986676216125488,
+    "Test_Sain": {
+        "pfa_mah": 0.0551109494361586
+    },
+    "Anomalies": {
+        "Test_Crosstalk": {
+            "detection_rate_mah": 0.0551109494361586,
+            "auc_roc_mah": 0.5
+        }
+    }
+}
