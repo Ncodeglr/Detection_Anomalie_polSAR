@@ -133,13 +133,13 @@ def main():
     # 7. Génération et injection du Crosstalk
     print("\n[*] 5. Génération et injection de l'anomalie Crosstalk...")
     delta_generator = SyntheticParameterGenerator(
-        mean_db=-15.0, std_dev_amp=0.01, phase_mean_rad=0.0, phase_concentration=1e-5
+        mean_db=-22.0, std_dev_amp=0.01, phase_mean_rad=0.0, phase_concentration=1e-5
     )
-    crosstalk_anomaly = Crosstalk(delta=delta_generator(num_samples=1, seed=42)[0].item())
-    print(f"   - Crosstalk (delta={crosstalk_anomaly.delta:.3f}) injecté sur Région B")
+    #crosstalk_anomaly = Crosstalk(delta=delta_generator(num_samples=1, seed=42)[0].item())
+    #print(f"   - Crosstalk (delta={crosstalk_anomaly.delta:.3f}) injecté sur Région B")
 
-    #crosstalk_anomaly = Crosstalk(delta=0.11+0.0j)
-    #print(f"   - Crosstalk (delta={crosstalk_anomaly.delta}) injecté sur Région B")
+    crosstalk_anomaly = Crosstalk(delta=0.14+0.0226j)
+    print(f"   - Crosstalk (delta={crosstalk_anomaly.delta}) injecté sur Région B")
 
 
     # Injection de l'anomalie dans le dataset "Région B"
