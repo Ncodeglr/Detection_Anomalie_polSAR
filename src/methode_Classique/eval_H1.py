@@ -141,13 +141,12 @@ if __name__ == "__main__":
     # ==============================================================================
     print("\n[*] Génération des anomalies (Crosstalk et Gain testés distinctement sur chaque sous-zone)...")
     
-    # 1. Instanciation avec les nouveaux paramètres
-    # Pour "delta" : par exemple une amplitude à -30 dB et une phase concentrée autour de 45°
+    # 1. Instanciation avec les nouveaux paramètre
     delta_generator = SyntheticParameterGenerator(
-        mean_db=-15.0,                # Niveau typique de cross-talk cité dans l'article
+        mean_db=-22.49,                  # Niveau typique de cross-talk cité dans l'article
         std_dev_amp=0.01,               # Légère variation
-        phase_mean_rad=0.0,           # Peu importe si le kappa est à 0
-        phase_concentration=1e-5       # Kappa = 0 donne une phase aléatoire uniforme (typiques des bruits de couplage)
+        phase_mean_rad=0.0,             # Peu importe si le kappa est à 0
+        phase_concentration=1e-5        # Kappa = 0 donne une phase aléatoire uniforme (typiques des bruits de couplage)
     )
 
     # Utilisation d'une seed fixe pour la reproductibilité entre les méthodes

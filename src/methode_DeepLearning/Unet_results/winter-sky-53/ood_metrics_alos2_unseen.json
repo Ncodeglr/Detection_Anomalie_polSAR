@@ -1,0 +1,10 @@
+{
+    "pfa_target": 0.05,
+    "ALOS2_Unseen_Sain": {
+        "pfa_mah": 0.08015189873417722
+    },
+    "ALOS2_Unseen_Crosstalk": {
+        "detection_rate_mah": 0.6988461538461539,
+        "auc_roc_mah": 0.9086078351184681
+    }
+}
