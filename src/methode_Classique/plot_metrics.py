@@ -2,6 +2,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+import json
 
 def get_anomaly_score(scores: np.ndarray, metric_name: str) -> np.ndarray:
     """ 
@@ -15,6 +16,12 @@ def print_evaluation_ratios(calib_dir: Path, test_dir: Path, anomalies: list, pf
     """ Calcule et affiche les ratios d'acceptation/rejet sur les Zones 2.1 et 2.2. """
     metrics_map = {"Depth Projection": "Depth"}
     
+    anomalies_info = {}
+    info_path = test_dir / "anomalies_info.json"
+    if info_path.exists():
+        with open(info_path, "r") as f:
+            anomalies_info = json.load(f)
+
     for print_name, metric in metrics_map.items():
         # 1. Charger les scores de la Zone 1 pour définir le seuil
         scores_z1 = np.load(calib_dir / f"Train_{metric}_Scores.npy")
@@ -53,7 +60,18 @@ def print_evaluation_ratios(calib_dir: Path, test_dir: Path, anomalies: list, pf
             total = len(y_score_h1)
             rejetes = int(np.sum(y_score_h1 > threshold))
             acceptes = total - rejetes
-            print(f"\n   [Zone 2.2 - Anomalie : {anomaly}]")
+            
+            delta_str = ""
+            if anomaly in anomalies_info:
+                try:
+                    delta_cplx = complex(anomalies_info[anomaly])
+                    amp = abs(delta_cplx)
+                    phase_deg = np.angle(delta_cplx, deg=True)
+                    delta_str = f" | delta: {delta_cplx:.4g} (Amp: {amp:.4f}, Phase: {phase_deg:.1f}°)"
+                except ValueError:
+                    delta_str = f" | delta: {anomalies_info[anomaly]}"
+                    
+            print(f"\n   [Zone 2.2 - Anomalie : {anomaly}{delta_str}]")
             print(f"   ↳ Acceptées : {acceptes:5d} / {total} ({100.0*acceptes/total:6.2f}%) | ❌ Faux Négatifs")
             print(f"   ↳ Rejetées  : {rejetes:5d} / {total} ({100.0*rejetes/total:6.2f}%) | 🚨 Vrais Positifs (Détection)")
     print("-" * 65)

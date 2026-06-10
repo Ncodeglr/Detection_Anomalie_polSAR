@@ -166,12 +166,15 @@ if __name__ == "__main__":
         final_anomaly_definitions.append(crosstalk_anomaly)
         print(f"   - Anomalies pour sous-zone {i+1}: Crosstalk (delta={crosstalk_anomaly.delta})")
 
+    anomalies_info = {}
     for i, (loader_part, anomaly) in enumerate(zip(loaders_2_2_parts, final_anomaly_definitions)):
         zone_index = i + 1
         anomaly_type = anomaly.__class__.__name__
         anomaly_name = f"Zone_2_2_Part_{zone_index}"
         anomaly_log_name = f"{anomaly_name}_{anomaly_type}"
         
+        anomalies_info[anomaly_log_name] = str(anomaly.delta)
+
         print(f"\n[*] Injection de l'anomalie sur {anomaly_name} : {anomaly_type} ({anomaly.name})")
         X_test_h1 = extract_anomalous_features(loader_part, anomaly)
         
@@ -182,3 +185,7 @@ if __name__ == "__main__":
         np.save(out_dir / f"{anomaly_log_name}_Depth_Scores.npy", depth_scores)
         np.save(out_dir / f"X_{anomaly_log_name}_features.npy", X_test_h1)
         print(f"[+] Scores sauvegardés pour l'anomalie : {anomaly_log_name}")
+
+    import json
+    with open(out_dir / "anomalies_info.json", "w") as f:
+        json.dump(anomalies_info, f, indent=4)

@@ -64,6 +64,9 @@ def evaluate_ood_system(model, loader1_train, loader1_valid, loader2_1, final_lo
         anomaly_log_name = f"{anomaly_name}_{anomaly_type}"
 
         print(f"\n--- Évaluation sur {anomaly_name} avec anomalie {anomaly_type} ---")
+        delta_val = getattr(anomaly_def, 'delta', None)
+        delta_str = f" (delta = {delta_val})" if delta_val is not None else ""
+        print(f"\n--- Évaluation sur {anomaly_name} avec anomalie {anomaly_type}{delta_str} ---")
 
         # A. Get baseline scores on the PURE data for this part
         print("   - Calcul des scores sur les données pures de la sous-zone...")

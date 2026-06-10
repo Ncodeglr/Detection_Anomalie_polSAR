@@ -83,6 +83,13 @@ def main():
     latest_test_run = max([d for d in test_base.glob("run_*") if d.is_dir()], key=os.path.getmtime)
     anomaly_files = sorted([f for f in latest_test_run.glob("X_*_features.npy") if "pure" not in f.name])
     
+    import json
+    anomalies_info = {}
+    info_path = latest_test_run / "anomalies_info.json"
+    if info_path.exists():
+        with open(info_path, "r") as f:
+            anomalies_info = json.load(f)
+
     anomaly_scores_dict = {}
     for a_file in anomaly_files:
         anomaly_name = a_file.name.replace("X_", "").replace("_features.npy", "")
@@ -97,7 +104,18 @@ def main():
         total = len(scores_anom)
         rejetes = int(np.sum(scores_anom > threshold))
         acceptes = total - rejetes
-        print(f"\n   [Zone 2.2 - Anomalie : {anomaly_name}]")
+        
+        delta_str = ""
+        if anomaly_name in anomalies_info:
+            try:
+                delta_cplx = complex(anomalies_info[anomaly_name])
+                amp = abs(delta_cplx)
+                phase_deg = np.angle(delta_cplx, deg=True)
+                delta_str = f" | delta: {delta_cplx:.4g} (Amp: {amp:.4f}, Phase: {phase_deg:.1f}°)"
+            except ValueError:
+                delta_str = f" | delta: {anomalies_info[anomaly_name]}"
+
+        print(f"\n   [Zone 2.2 - Anomalie : {anomaly_name}{delta_str}]")
         print(f"   ↳ Acceptées : {acceptes:5d} / {total} ({100.0*acceptes/total:6.2f}%) | ❌ Faux Négatifs")
         print(f"   ↳ Rejetées  : {rejetes:5d} / {total} ({100.0*rejetes/total:6.2f}%) | 🚨 Vrais Positifs (Détection)")
         
