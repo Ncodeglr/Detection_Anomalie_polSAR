@@ -12,45 +12,21 @@ import matplotlib.pyplot as plt
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "cvnn", "src"))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from cvnn.config import load_config
-from cvnn.data import get_dataloaders, get_full_image_dataloader
+from shared_setup import setup_experiment_env, get_test_loaders, get_shared_anomaly_generator
 from cvnn.models import UNet
 from cvnn.visualize import plot_latent_space
 
 from methode_DeepLearning.ood_detector import OOD_Detector
 from anomalies import Crosstalk
-from synthetic_parameter_generator import SyntheticParameterGenerator
 
 def main():
     print("[*] Début de l'évaluation OoD sur des données non vues (ALOS2-San Francisco)")
-    repo_root = Path(__file__).resolve().parents[2]
-    
-    if len(sys.argv) >= 2:
-        config_path = sys.argv[1]
-    else:
-        config_path = str(repo_root / "configs" / "config_Unet.yaml")
-        
-    config = load_config(config_path)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    #1. Résolution du chemin absolu de l'image ALOS2
-    trainpath = Path(config["data"]["dataset"]["trainpath"])
-    if not trainpath.is_absolute():
-        config["data"]["dataset"]["trainpath"] = str((repo_root / trainpath).resolve())
-        
-    print(f"[*] Fichier cible (Doit être l'image complète ALOS2 8080x22608) : {config['data']['dataset']['trainpath']}")
-
-    # 2. Définition des coordonnées originelles de PolSF pour la calibration
-    # L'image PolSF a été extraite aux coordonnées (x1=736, y1=2832, x2=3520, y2=7888)
-    # PolSFDataset est géré nativement par cvnn comme étant déjà la bonne zone rognée.
-    # On retire donc tout crop_coordinates manuel pour éviter un double-crop vide.
-    config_polsf = copy.deepcopy(config)
-    config_polsf["data"]["dataset"].pop("crop_coordinates", None)
-    # On DOIT forcer le calcul des statistiques pour obtenir min_value/max_value pour LogAmplitude
-    config_polsf["data"]["recompute_statistics"] = True
     
     print("\n[*] 1. Chargement de la région originelle (PolSF) pour la calibration...")
-    train_loader, valid_loader, _ = get_dataloaders(config_polsf, device) #On obtient le train_loader et valid_loader de PolSF
+    config, config_polsf, device, loaders = setup_experiment_env(sys.argv, __file__, force_cpu=False)
+    train_loader, valid_loader, _ = loaders
+    
+    print(f"[*] Fichier cible (Doit être l'image complète ALOS2 8080x22608) : {config['data']['dataset']['trainpath']}")
 
     #3. Chargement du modèle UNet
     print("\n[*] 2. Chargement du modèle UNet pré-entraîné...")
@@ -100,124 +76,147 @@ def main():
 
     #5. Sélection de régions STRICTEMENT non vues dans l'image ALOS2 (8080 x 22608)
     
-    #Région A (Saine) : On prend une région en dessous de PolSF - Pour sortir de la zone de San Francisco, on passe explicitement sur l'image maître ALOS2.
-    config_unseen_sain = copy.deepcopy(config_polsf) # Hérite des statistiques fraîchement calculées
-    config_unseen_sain["data"]["dataset"]["name"] = "ALOSDataset"
-    config_unseen_sain["data"]["recompute_statistics"] = False
-    config_unseen_sain["data"]["dataset"]["crop_coordinates"] = {
-        "start_row": 4000, "end_row": 6000,     # Lignes 4000 à 6000
-        "start_col": 2832, "end_col": 7888      # Mêmes colonnes que PolSF
-    }
-    
-    #Région B (Anomalie) : On prend une région totalement décalée vers la droite
-    config_unseen_ano = copy.deepcopy(config_polsf) # Hérite des statistiques fraîchement calculées
-    config_unseen_ano["data"]["dataset"]["name"] = "ALOSDataset"
-    config_unseen_ano["data"]["recompute_statistics"] = False
-    config_unseen_ano["data"]["dataset"]["crop_coordinates"] = {
-        "start_row": 4000, "end_row": 6000,
-        "start_col": 10000, "end_col": 15000
-    }
-
     print("\n[*] 4. Chargement des régions Non Vues...")
-    loader_sain, _, _ = get_full_image_dataloader(config_unseen_sain, use_cuda=False)
-    loader_ano, _, _ = get_full_image_dataloader(config_unseen_ano, use_cuda=False)
+    loader_sain, loaders_ano_parts = get_test_loaders(config_polsf, use_cuda=False)
+    print(f"   -> Zone 2.1 (Saine)    : {len(loader_sain.dataset)} patchs")
+    for i, loader in enumerate(loaders_ano_parts):
+        print(f"   -> Zone 2.2 (Part {i+1}) : {len(loader.dataset)} patchs")
+
+    # 6. Évaluation des Fausse Alarmes sur les zones pures (2.1 et 2.2)
+    print("\n" + "-" * 65)
+    print("🔹 TEST : Deep Learning (Ensemble Sémantique + Physique)")
+
+    # --- Zone 2.1 ---
+    preds_z21, scores_z21 = detector.detect(loader_sain)
+    total_21 = len(scores_z21)
+    rejetes_21 = int(np.sum(scores_z21 > 1.0))
+    acceptes_21 = total_21 - rejetes_21
     
-    print(f"   -> Région A (Saine)    : {len(loader_sain.dataset)} patchs")
-    print(f"   -> Région B (Anomalie) : {len(loader_ano.dataset)} patchs")
+    print(f"\n   [Zone 2.1 - Saine]")
+    print(f"   ↳ Acceptées : {acceptes_21:5d} / {total_21} ({100.0*acceptes_21/total_21:6.2f}%) | ✅ Vrais Négatifs")
+    print(f"   ↳ Rejetées  : {rejetes_21:5d} / {total_21} ({100.0*rejetes_21/total_21:6.2f}%) | ❌ Fausses Alarmes")
 
-    # 6. Évaluation des Fausse Alarmes sur une région non vue
-    print("\n--- Évaluation du Bruit de Fond (Sain) sur Région Non Vue ---")
-    preds_mah_sain, scores_mah_sain = detector.detect(loader_sain)
-    print(f"PFA empirique (Mahal)    : {np.mean(preds_mah_sain)*100:.2f}% (Idéal proche de {pfa_target*100}%)")
+    ood_metrics = {
+        "pfa_target": pfa_target,
+        "Zone_2_1_Saine": {
+            "pfa_mah": float(rejetes_21 / total_21)
+        }
+    }
 
-    # 7. Génération et injection du Crosstalk
-    print("\n[*] 5. Génération et injection de l'anomalie Crosstalk...")
-    delta_generator = SyntheticParameterGenerator(
-        mean_db=-22.49, std_dev_amp=0.01, phase_mean_rad=0.0, phase_concentration=1e-5
-    )
-    #crosstalk_anomaly = Crosstalk(delta=delta_generator(num_samples=1)[0].item())
-    #print(f"   - Crosstalk (delta={crosstalk_anomaly.delta:.3f}) injecté sur Région B")
-
-    crosstalk_anomaly = Crosstalk(delta=-0.02126+0.05766j)
-    print(f"   - Crosstalk (delta={crosstalk_anomaly.delta}) injecté sur Région B")
-
-
-    # Injection de l'anomalie dans le dataset "Région B"
-    base_ds = loader_ano.dataset
-    while hasattr(base_ds, 'dataset') or hasattr(base_ds, 'base_dataset'):
-        base_ds = getattr(base_ds, 'dataset', getattr(base_ds, 'base_dataset', base_ds))
-    original_transform = getattr(base_ds, 'transform', None)
-
-    if hasattr(original_transform, 'transforms'):
-        new_transforms = []
-        injected = False
-        for t in original_transform.transforms:
-            if t.__class__.__name__ == 'LogAmplitude':
-                new_transforms.append(crosstalk_anomaly)
-                injected = True
-            new_transforms.append(t)
-        if not injected: new_transforms.append(crosstalk_anomaly)
-        base_ds.transform = original_transform.__class__(new_transforms)
-    else:
-        base_ds.transform = torch.nn.Sequential(crosstalk_anomaly, original_transform) if original_transform else crosstalk_anomaly
-
-    # 8. Évaluation sur la région contenant le Crosstalk
-    print("\n--- Évaluation du Taux de Détection sur Crosstalk ---")
-    preds_mah_ano, scores_mah_ano = detector.detect(loader_ano)
-
-    print(f"   -> Taux de Détection (Mahal)    : {np.mean(preds_mah_ano)*100:.2f}%")
-
-    # Calcul de l'AUC
-    y_true = np.concatenate([np.zeros_like(scores_mah_sain), np.ones_like(scores_mah_ano)])
-    auc_mah = roc_auc_score(y_true, np.concatenate([scores_mah_sain, scores_mah_ano]))
-        
-    print(f"   -> Score AUC-ROC (Mahal)        : {auc_mah:.4f}")
-
-    # 9. Visualisation de l'espace latent pour comparer Région Saine (Non vue) et Crosstalk
-    print(f"\n[*] 6. Visualisation de l'espace latent (PCA)...")
-    latents_clean, latents_ano = [], []
-    num_batches_viz = min(1, len(loader_sain), len(loader_ano))
+    # --- Zone 2.2 (Saine globale) ---
+    scores_z22_parts = []
+    for loader_part in loaders_ano_parts:
+        _, scores_part = detector.detect(loader_part)
+        scores_z22_parts.append(scores_part)
+    scores_z22 = np.concatenate(scores_z22_parts)
     
+    total_22 = len(scores_z22)
+    rejetes_22 = int(np.sum(scores_z22 > 1.0))
+    acceptes_22 = total_22 - rejetes_22
+
+    print(f"\n   [Zone 2.2 - Saine (Pure Globale)]")
+    print(f"   ↳ Acceptées : {acceptes_22:5d} / {total_22} ({100.0*acceptes_22/total_22:6.2f}%) | ✅ Vrais Négatifs")
+    print(f"   ↳ Rejetées  : {rejetes_22:5d} / {total_22} ({100.0*rejetes_22/total_22:6.2f}%) | ❌ Fausses Alarmes")
+    
+    ood_metrics["Zone_2_2_Saine"] = {
+        "pfa_mah": float(rejetes_22 / total_22)
+    }
+
+    # Preparation de l'espace latent pour la région saine
+    latents_clean = []
+    num_batches_viz = 1
     with torch.no_grad():
         for i, batch in enumerate(loader_sain):
             if i >= num_batches_viz: break
             x = batch[0] if isinstance(batch, (list, tuple)) else batch
             z_features = detector.get_latent_features(x.to(device))
             latents_clean.append(z_features.cpu())
-            
-        for i, batch in enumerate(loader_ano):
-            if i >= num_batches_viz: break
-            x = batch[0] if isinstance(batch, (list, tuple)) else batch
-            z_features = detector.get_latent_features(x.to(device))
-            latents_ano.append(z_features.cpu())
 
-    Z_c, Z_a = torch.cat(latents_clean, dim=0), torch.cat(latents_ano, dim=0)
+    latents_ano_all = []
+
+    # 7. Génération et injection des 3 Crosstalks
+    print("\n[*] 5. Génération et injection des anomalies Crosstalk (3 deltas)...")
+    delta_generator, anomaly_seed = get_shared_anomaly_generator(config)
+    delta_values = delta_generator(num_samples=3, seed=anomaly_seed)
+
+    for i in range(3):
+        loader_ano = loaders_ano_parts[i]
+        crosstalk_anomaly = Crosstalk(delta=delta_values[i].item())
+        
+        delta_cplx = complex(crosstalk_anomaly.delta)
+        amp = abs(delta_cplx)
+        phase_deg = np.angle(delta_cplx, deg=True)
+        delta_str = f" | delta: {delta_cplx:.4g} (Amp: {amp:.4f}, Phase: {phase_deg:.1f}°)"
+
+        # Injection de l'anomalie dans le dataset
+        base_ds = loader_ano.dataset
+        while hasattr(base_ds, 'dataset') or hasattr(base_ds, 'base_dataset'):
+            base_ds = getattr(base_ds, 'dataset', getattr(base_ds, 'base_dataset', base_ds))
+        original_transform = getattr(base_ds, 'transform', None)
+
+        if hasattr(original_transform, 'transforms'):
+            new_transforms = []
+            injected = False
+            for t in original_transform.transforms:
+                if t.__class__.__name__ == 'LogAmplitude':
+                    new_transforms.append(crosstalk_anomaly)
+                    injected = True
+                new_transforms.append(t)
+            if not injected: new_transforms.append(crosstalk_anomaly)
+            base_ds.transform = original_transform.__class__(new_transforms)
+        else:
+            base_ds.transform = torch.nn.Sequential(crosstalk_anomaly, original_transform) if original_transform else crosstalk_anomaly
+
+        # 8. Évaluation sur la région contenant le Crosstalk
+        preds_mah_ano, scores_mah_ano = detector.detect(loader_ano)
+        
+        total_ano = len(scores_mah_ano)
+        rejetes_ano = int(np.sum(scores_mah_ano > 1.0))
+        acceptes_ano = total_ano - rejetes_ano
+
+        # Calcul de l'AUC (comparaison avec la Zone 2.2 Pure)
+        y_true = np.concatenate([np.zeros_like(scores_z22), np.ones_like(scores_mah_ano)])
+        auc_mah = roc_auc_score(y_true, np.concatenate([scores_z22, scores_mah_ano]))
+        
+        print(f"\n   [Zone 2.2 - Anomalie : Zone_2_2_Part_{i+1}_Crosstalk{delta_str}]")
+        print(f"   ↳ Acceptées : {acceptes_ano:5d} / {total_ano} ({100.0*acceptes_ano/total_ano:6.2f}%) | ❌ Faux Négatifs")
+        print(f"   ↳ Rejetées  : {rejetes_ano:5d} / {total_ano} ({100.0*rejetes_ano/total_ano:6.2f}%) | 🚨 Vrais Positifs (Détection)")
+        print(f"   ↳ AUC-ROC   : {auc_mah:.4f}")
+        
+        ood_metrics[f"Zone_2_2_Part_{i+1}_Crosstalk"] = {
+            "delta": str(crosstalk_anomaly.delta),
+            "detection_rate_mah": float(rejetes_ano / total_ano),
+            "auc_roc_mah": float(auc_mah)
+        }
+
+        # Collect latent features for visualization
+        with torch.no_grad():
+            for j, batch in enumerate(loader_ano):
+                if j >= num_batches_viz: break
+                x = batch[0] if isinstance(batch, (list, tuple)) else batch
+                z_features = detector.get_latent_features(x.to(device))
+                latents_ano_all.append(z_features.cpu())
+
+        # Restauration finale pour la propreté du dataset
+        base_ds.transform = original_transform
+        
+    print("-" * 65)
+
+    # 9. Visualisation de l'espace latent pour comparer Région Saine (Non vue) et Crosstalk
+    print(f"\n[*] 6. Visualisation de l'espace latent (PCA)...")
+    Z_c, Z_a = torch.cat(latents_clean, dim=0), torch.cat(latents_ano_all, dim=0)
     Z_all = torch.cat([Z_c, Z_a], dim=0)
     labels_all = np.concatenate([np.zeros(len(Z_c)), np.ones(len(Z_a))])
     
     fig_latent = plot_latent_space(
         latents=Z_all, labels=labels_all, method="pca", 
-        classes_names={0: "ALOS2 Sain (Non Vu)", 1: "ALOS2 + Crosstalk"}
+        classes_names={0: "ALOS2 Sain (Non Vu)", 1: "ALOS2 + Crosstalk (Mix 3 zones)"}
     )
     
     save_path_latent = latest_run_dir / "latent_space_alos2_unseen.png"
     fig_latent.savefig(save_path_latent, bbox_inches="tight", dpi=300)
     plt.close(fig_latent)
     print(f"   [+] PCA sauvegardée : {save_path_latent}")
-
-    # Restauration finale
-    base_ds.transform = original_transform
-    
-    ood_metrics = {
-        "pfa_target": pfa_target,
-        "ALOS2_Unseen_Sain": {
-            "pfa_mah": float(np.mean(preds_mah_sain))
-        },
-        "ALOS2_Unseen_Crosstalk": {
-            "detection_rate_mah": float(np.mean(preds_mah_ano)),
-            "auc_roc_mah": float(auc_mah)
-        }
-    }
     
     metrics_path = latest_run_dir / "ood_metrics_alos2_unseen.json"
     with open(metrics_path, "w") as f:

@@ -3,6 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 import json
+try:
+    from sklearn.metrics import roc_auc_score
+except ImportError:
+    roc_auc_score = None
 
 def get_anomaly_score(scores: np.ndarray, metric_name: str) -> np.ndarray:
     """ 
@@ -23,12 +27,12 @@ def print_evaluation_ratios(calib_dir: Path, test_dir: Path, anomalies: list, pf
             anomalies_info = json.load(f)
 
     for print_name, metric in metrics_map.items():
-        # 1. Charger les scores de la Zone 1 pour définir le seuil
-        scores_z1 = np.load(calib_dir / f"Train_{metric}_Scores.npy")
-        y_score_z1 = get_anomaly_score(scores_z1, metric)
+        # 1. Charger les scores de Validation pour définir le seuil de manière robuste
+        scores_valid = np.load(calib_dir / f"Valid_{metric}_Scores.npy")
+        y_score_valid = get_anomaly_score(scores_valid, metric)
         
         # Définition du seuil : On garde le percentile correspondant au PFA toléré (ex: 95% acceptés)
-        threshold = np.percentile(y_score_z1, 100 * (1 - pfa))
+        threshold = np.percentile(y_score_valid, 100 * (1 - pfa))
         
         print("-" * 65)
         print(f"🔹 TEST : {print_name} (Classique)")
@@ -61,6 +65,15 @@ def print_evaluation_ratios(calib_dir: Path, test_dir: Path, anomalies: list, pf
             rejetes = int(np.sum(y_score_h1 > threshold))
             acceptes = total - rejetes
             
+            # --- Calcul AUC-ROC ---
+            # Classe 0 = Saine (Zone 2.2 pure), Classe 1 = Anomalie (Zone 2.2 corrompue)
+            auc_str = "N/A (sklearn non installé)"
+            if roc_auc_score is not None:
+                y_true = np.concatenate([np.zeros_like(y_score_z22), np.ones_like(y_score_h1)])
+                y_scores = np.concatenate([y_score_z22, y_score_h1])
+                auc_roc = roc_auc_score(y_true, y_scores)
+                auc_str = f"{auc_roc:.4f}"
+
             delta_str = ""
             if anomaly in anomalies_info:
                 try:
@@ -74,6 +87,7 @@ def print_evaluation_ratios(calib_dir: Path, test_dir: Path, anomalies: list, pf
             print(f"\n   [Zone 2.2 - Anomalie : {anomaly}{delta_str}]")
             print(f"   ↳ Acceptées : {acceptes:5d} / {total} ({100.0*acceptes/total:6.2f}%) | ❌ Faux Négatifs")
             print(f"   ↳ Rejetées  : {rejetes:5d} / {total} ({100.0*rejetes/total:6.2f}%) | 🚨 Vrais Positifs (Détection)")
+            print(f"   ↳ AUC-ROC   : {auc_str}")
     print("-" * 65)
 
 def plot_histograms(metric: str, calib_dir: Path, test_dir: Path, anomalies: list):
@@ -82,12 +96,14 @@ def plot_histograms(metric: str, calib_dir: Path, test_dir: Path, anomalies: lis
     
     # 1. Charger les données
     scores_z1 = np.load(calib_dir / f"Train_{metric}_Scores.npy")
+    scores_valid = np.load(calib_dir / f"Valid_{metric}_Scores.npy")
     scores_z21 = np.load(test_dir / f"Pure_2_1_{metric}_Scores.npy")
     scores_z22 = np.load(test_dir / f"Pure_2_2_{metric}_Scores.npy")
     
     # 2. Tracer les zones pures (Saines)
     kwargs = dict(histtype='stepfilled', alpha=0.3, density=True, bins=50)
     plt.hist(scores_z1, label='Zone 1 (Train)', color='blue', **kwargs)
+    plt.hist(scores_valid, label='Zone 1 (Valid)', color='purple', **kwargs)
     plt.hist(scores_z21, label='Zone 2.1 (Valid PFA)', color='cyan', **kwargs)
     plt.hist(scores_z22, label='Zone 2.2 (Pure)', color='green', **kwargs)
     

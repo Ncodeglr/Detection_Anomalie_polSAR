@@ -13,16 +13,12 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "cvnn", "src
 sys.path.append(os.path.dirname(__file__))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from cvnn.config import load_config
-from cvnn.utils import set_seed
-from cvnn.data import azimut_split
-from cvnn.data import azimut_split, get_full_image_dataloader
+from shared_setup import setup_experiment_env, get_test_loaders, get_shared_anomaly_generator
 
 # Import depuis vos propres scripts
 from feature_extraction import compute_batched_global_covariance, extract_batched_correlation_features, extract_features_from_loader
 from H0 import DepthCalibrator
 from H1 import Crosstalk
-from synthetic_parameter_generator import SyntheticParameterGenerator
 
 
 # ==============================================================================
@@ -44,67 +40,34 @@ def extract_anomalous_features(dataloader, anomaly_generator, desc="Extraction H
             
         x_np = inputs.cpu().numpy()
         
-        # 1. Calcul de la covariance pure
+        #1. Calcul de la covariance pure
         mat_C_batched = compute_batched_global_covariance(x_np)
         
-        # 2. INJECTION DE L'ANOMALIE
+        #2. Injection du Crosstalk sur les matrices de covariance
         mat_C_corrupted = anomaly_generator.apply_corruption(mat_C_batched)
         
-        # 3. Extraction des corrélations altérées
+        #3. Extraction des corrélations altérées
         features_batched = extract_batched_correlation_features(mat_C_corrupted)
         X_list.append(features_batched)
 
     return np.vstack(X_list)
 
-
-
 if __name__ == "__main__":
-    config_path = sys.argv[1] if len(sys.argv) > 1 else "configs/config.yaml"
-    cfg = load_config(config_path)
-    set_seed(cfg.get("seed", 42))
-    
-    # Résolution absolue du chemin des données par rapport à la racine du projet
-    trainpath = Path(cfg["data"]["dataset"]["trainpath"])
-    if not trainpath.is_absolute():
-        repo_root = Path(__file__).resolve().parents[2]
-        cfg["data"]["dataset"]["trainpath"] = str((repo_root / trainpath).resolve())
+    print("\n[*] Récupération des statistiques depuis la Zone 1...")
+    cfg, config_polsf, _, _ = setup_experiment_env(sys.argv, __file__, force_cpu=True)
 
     print("\n[*] Chargement des zones 2.1 et 2.2 pour les tests...")
-    loaders_dict = azimut_split(cfg, use_cuda=False)
-    loader_test_2_1, _, _ = loaders_dict["loader2_1_full"]
-    loader_test_2_2, _, _ = loaders_dict["loader2_2_full"]
-
-    # --- Division de la Zone 2.2 en 3 parties sur l'axe du range (colonnes) ---
-    print("\n[*] Division de la Zone 2.2 en 3 sous-zones (range)...")
-    dataset_cfg = cfg["data"]["dataset"]
-    crop_cfg = dataset_cfg.get("crop_coordinates", {})
-    
-    zone2_2_start_row = dataset_cfg.get("azimut_split_x2")
-    zone2_2_end_row = crop_cfg.get("end_row_crop")
-    zone2_2_start_col = crop_cfg.get("start_col", 0)
-    zone2_2_end_col = crop_cfg.get("end_col_crop")
-
-    col_split_points = np.linspace(zone2_2_start_col, zone2_2_end_col, 4, dtype=int)
-    print(f"   - Points de split (colonnes) : {col_split_points}")
-
-    loaders_2_2_parts = []
-    for i in range(3):
-        cfg_part = copy.deepcopy(cfg)
-        cfg_part["data"]["dataset"]["crop_coordinates"] = {
-            "start_row": zone2_2_start_row, "end_row": zone2_2_end_row,
-            "start_col": col_split_points[i], "end_col": col_split_points[i+1],
-            "max_rows": crop_cfg.get("max_rows"), "max_cols": crop_cfg.get("max_cols")
-        }
-        loader, _, _ = get_full_image_dataloader(cfg_part, use_cuda=False)
-        loaders_2_2_parts.append(loader)
-        print(f"   - Sous-zone {i+1} créée ({col_split_points[i]} -> {col_split_points[i+1]}) avec {len(loader.dataset)} patchs.")
+    loader_test_2_1, loaders_2_2_parts = get_test_loaders(config_polsf, use_cuda=False)
+    print(f"   -> Zone 2.1 (Saine)    : {len(loader_test_2_1.dataset)} patchs")
+    for i, loader in enumerate(loaders_2_2_parts):
+        print(f"   -> Zone 2.2 (Part {i+1}) : {len(loader.dataset)} patchs")
 
     base_calib_dir = Path("data_calibration")
     if not base_calib_dir.exists() or not list(base_calib_dir.glob("run_*")):
         print("[!] ERREUR: Aucun dossier de calibration H0 trouvé. Lancez H0.py en premier.")
         sys.exit(1)
 
-    # Récupérer le dossier de calibration le plus récent
+    #Récupérer le dossier de calibration le plus récent
     calib_dir = max([d for d in base_calib_dir.glob("run_*") if d.is_dir()], key=os.path.getmtime)
     print(f"\n[*] Utilisation de la calibration trouvée : {calib_dir}")
 
@@ -130,7 +93,7 @@ if __name__ == "__main__":
         X_test_pure_part = extract_features_from_loader(loader_part, desc=f"Extraction Pure {anomaly_name}")
         X_test_pure_2_2_parts.append(X_test_pure_part)
         
-    # Concaténation pour sauvegarder une Pure_2_2 globale (compatibilité avec plot_metrics et SVDD)
+    #Concaténation pour sauvegarder une Pure_2_2 globale
     X_test_pure_2_2 = np.vstack(X_test_pure_2_2_parts)
     print("\n[*] Calcul et sauvegarde des scores pour l'ensemble des données PURES 2.2...")
     np.save(out_dir / "Pure_2_2_Depth_Scores.npy", DepthCalibrator().load_and_score(X_test_pure_2_2, calib_dir))
@@ -141,24 +104,9 @@ if __name__ == "__main__":
     # ==============================================================================
     print("\n[*] Génération des anomalies (Crosstalk et Gain testés distinctement sur chaque sous-zone)...")
     
-    # 1. Instanciation avec les nouveaux paramètre
-    delta_generator = SyntheticParameterGenerator(
-        mean_db=-22.49,                  # Niveau typique de cross-talk cité dans l'article
-        std_dev_amp=0.01,               # Légère variation
-        phase_mean_rad=0.0,             # Peu importe si le kappa est à 0
-        phase_concentration=1e-5        # Kappa = 0 donne une phase aléatoire uniforme (typiques des bruits de couplage)
-    )
-
-    # Utilisation d'une seed fixe pour la reproductibilité entre les méthodes
-    anomaly_seed = cfg.get("anomaly_seed", 1234)
-
-    # 2. Génération des valeurs
-    nombre_echantillons = 3
-
-    #delta_values = delta_generator(num_samples=nombre_echantillons, seed=anomaly_seed)
-    delta_values = delta_generator(num_samples=nombre_echantillons)
-
-    
+    #2. Génération des valeurs de delta pour les 3 sous-zones de la Zone 2.2
+    delta_generator, anomaly_seed = get_shared_anomaly_generator(cfg)
+    delta_values = delta_generator(num_samples=3, seed=anomaly_seed)
     
     final_anomaly_definitions = []
     for i in range(3):
@@ -178,10 +126,10 @@ if __name__ == "__main__":
         print(f"\n[*] Injection de l'anomalie sur {anomaly_name} : {anomaly_type} ({anomaly.name})")
         X_test_h1 = extract_anomalous_features(loader_part, anomaly)
         
-        # Calcul des scores d'anomalies
+        #Calcul des scores d'anomalies
         depth_scores = DepthCalibrator().load_and_score(X_test_h1, calib_dir)
         
-        # Sauvegarde
+        #Sauvegarde
         np.save(out_dir / f"{anomaly_log_name}_Depth_Scores.npy", depth_scores)
         np.save(out_dir / f"X_{anomaly_log_name}_features.npy", X_test_h1)
         print(f"[+] Scores sauvegardés pour l'anomalie : {anomaly_log_name}")

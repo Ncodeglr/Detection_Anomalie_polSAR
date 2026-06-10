@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import roc_auc_score
 
 # Import de votre script SVDD personnalisé
 from svdd_custom import train_svdd_complex_simple2, score_svdd_batched
@@ -29,14 +30,16 @@ def main():
     calib_base = Path("../methode_Classique/data_calibration")
     test_base = Path("../methode_Classique/test_results")
     
-    X_zone1 = load_latest_features(calib_base, "X_zone1_features")
+    X_train = load_latest_features(calib_base, "X_train_features")
+    X_valid = load_latest_features(calib_base, "X_valid_features")
     X_pure_21 = load_latest_features(test_base, "X_test_pure_2_1")
     X_pure_22 = load_latest_features(test_base, "X_test_pure_2_2")
     
     print("[*] Normalisation des données (StandardScaler)...")
     scaler = StandardScaler()
-    # On "apprend" la normalisation uniquement sur les données saines (Zone 1)
-    X_zone1 = scaler.fit_transform(X_zone1)
+    # On "apprend" la normalisation uniquement sur les données saines d'entraînement
+    X_train = scaler.fit_transform(X_train)
+    X_valid = scaler.transform(X_valid)
     X_pure_21 = scaler.transform(X_pure_21)
     X_pure_22 = scaler.transform(X_pure_22)
     
@@ -45,22 +48,23 @@ def main():
     # nécessite beaucoup de RAM et de temps. On sélectionne un sous-ensemble aléatoire pour l'entraînement.
     N_TRAIN = 2500
     np.random.seed(42)
-    indices = np.random.choice(X_zone1.shape[0], min(N_TRAIN, X_zone1.shape[0]), replace=False)
-    X_train_sub = X_zone1[indices]
+    indices = np.random.choice(X_train.shape[0], min(N_TRAIN, X_train.shape[0]), replace=False)
+    X_train_sub = X_train[indices]
     
     print(f"[*] Entraînement du modèle SVDD (N={X_train_sub.shape[0]} patchs)...")
     # On utilise le kernel RBF normal car vos features sont déjà réelles (Partie Réelle, Imaginaire et Spans séparés)
     svdd_model = train_svdd_complex_simple2(X_train_sub, C=0.5, kernel='rbf', gamma=0.5, verbose=True)
     
     print("\n[*] Calcul des scores de distance...")
-    # On évalue sur toute la Zone 1 pour trouver le seuil PFA
-    scores_z1 = score_svdd_batched(svdd_model, X_zone1)
+    # On évalue sur le set de Validation pour trouver le seuil PFA robuste
+    scores_train = score_svdd_batched(svdd_model, X_train)
+    scores_valid = score_svdd_batched(svdd_model, X_valid)
     scores_z21 = score_svdd_batched(svdd_model, X_pure_21)
     scores_z22 = score_svdd_batched(svdd_model, X_pure_22) # Ajout pour l'histogramme
     
     # Seuil pour 5% de fausses alarmes (Les distances élevées sont des anomalies)
     pfa = 0.05
-    threshold = np.percentile(scores_z1, 100 * (1 - pfa))
+    threshold = np.percentile(scores_valid, 100 * (1 - pfa))
     
     # Dossier de sauvegarde pour les graphiques
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -79,6 +83,14 @@ def main():
     print(f"   ↳ Acceptées : {acceptes:5d} / {total} ({100.0*acceptes/total:6.2f}%) | ✅ Vrais Négatifs")
     print(f"   ↳ Rejetées  : {rejetes:5d} / {total} ({100.0*rejetes/total:6.2f}%) | ❌ Fausses Alarmes")
     
+    # Zone 2.2 (Saine globale)
+    total_22 = len(scores_z22)
+    rejetes_22 = int(np.sum(scores_z22 > threshold))
+    acceptes_22 = total_22 - rejetes_22
+    print(f"\n   [Zone 2.2 - Saine (Pure Globale)]")
+    print(f"   ↳ Acceptées : {acceptes_22:5d} / {total_22} ({100.0*acceptes_22/total_22:6.2f}%) | ✅ Vrais Négatifs")
+    print(f"   ↳ Rejetées  : {rejetes_22:5d} / {total_22} ({100.0*rejetes_22/total_22:6.2f}%) | ❌ Fausses Alarmes")
+
     # Recherche des anomalies dynamiquement
     latest_test_run = max([d for d in test_base.glob("run_*") if d.is_dir()], key=os.path.getmtime)
     anomaly_files = sorted([f for f in latest_test_run.glob("X_*_features.npy") if "pure" not in f.name])
@@ -105,6 +117,11 @@ def main():
         rejetes = int(np.sum(scores_anom > threshold))
         acceptes = total - rejetes
         
+        # --- Calcul AUC-ROC ---
+        y_true = np.concatenate([np.zeros_like(scores_z22), np.ones_like(scores_anom)])
+        y_scores_concat = np.concatenate([scores_z22, scores_anom])
+        auc_roc = roc_auc_score(y_true, y_scores_concat)
+
         delta_str = ""
         if anomaly_name in anomalies_info:
             try:
@@ -118,6 +135,7 @@ def main():
         print(f"\n   [Zone 2.2 - Anomalie : {anomaly_name}{delta_str}]")
         print(f"   ↳ Acceptées : {acceptes:5d} / {total} ({100.0*acceptes/total:6.2f}%) | ❌ Faux Négatifs")
         print(f"   ↳ Rejetées  : {rejetes:5d} / {total} ({100.0*rejetes/total:6.2f}%) | 🚨 Vrais Positifs (Détection)")
+        print(f"   ↳ AUC-ROC   : {auc_roc:.4f}")
         
     print("-" * 65)
     
@@ -126,7 +144,8 @@ def main():
     plt.figure(figsize=(10, 6))
     kwargs = dict(histtype='stepfilled', alpha=0.3, density=True, bins=50)
     
-    plt.hist(scores_z1, label='Zone 1 (Train)', color='blue', **kwargs)
+    plt.hist(scores_train, label='Zone 1 (Train)', color='blue', **kwargs)
+    plt.hist(scores_valid, label='Zone 1 (Valid)', color='purple', **kwargs)
     plt.hist(scores_z21, label='Zone 2.1 (Saine)', color='cyan', **kwargs)
     plt.hist(scores_z22, label='Zone 2.2 (Pure)', color='green', **kwargs)
     
