@@ -138,7 +138,7 @@ def main():
     #crosstalk_anomaly = Crosstalk(delta=delta_generator(num_samples=1)[0].item())
     #print(f"   - Crosstalk (delta={crosstalk_anomaly.delta:.3f}) injecté sur Région B")
 
-    crosstalk_anomaly = Crosstalk(delta=0.075487570092082024+0.07110723108053207j)
+    crosstalk_anomaly = Crosstalk(delta=-0.021256418898701668+0.05765506625175476j)
     print(f"   - Crosstalk (delta={crosstalk_anomaly.delta}) injecté sur Région B")
 
 

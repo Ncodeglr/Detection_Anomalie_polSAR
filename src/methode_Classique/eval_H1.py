@@ -155,7 +155,10 @@ if __name__ == "__main__":
     # 2. Génération des valeurs
     nombre_echantillons = 3
 
-    delta_values = delta_generator(num_samples=nombre_echantillons, seed=anomaly_seed)
+    #delta_values = delta_generator(num_samples=nombre_echantillons, seed=anomaly_seed)
+    delta_values = delta_generator(num_samples=nombre_echantillons)
+
+    
     
     final_anomaly_definitions = []
     for i in range(3):
