@@ -40,7 +40,7 @@ if __name__ == "__main__":
 
     #2. Dossier de sortie
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_dir = Path("calibration_results") / f"run_{timestamp}"
+    out_dir = Path("data_calibration") / f"run_{timestamp}"
     out_dir.mkdir(parents=True, exist_ok=True)
     
     #Sauvegarde de la matrice des features pour les méthodes Machine Learning

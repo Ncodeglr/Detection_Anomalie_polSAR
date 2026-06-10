@@ -109,7 +109,7 @@ def plot_histograms(metric: str, calib_dir: Path, test_dir: Path, anomalies: lis
     plt.close()
 
 if __name__ == "__main__":
-    base_calib_dir = Path("calibration_results")
+    base_calib_dir = Path("data_calibration")
     base_test_dir = Path("test_results")
     
     if not base_test_dir.exists() or not list(base_test_dir.glob("run_*")):

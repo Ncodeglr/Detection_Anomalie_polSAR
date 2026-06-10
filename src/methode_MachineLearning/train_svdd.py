@@ -26,7 +26,7 @@ def load_latest_features(base_dir: Path, prefix: str):
 
 def main():
     print("\n[*] Chargement des matrices de caractéristiques (16D)...")
-    calib_base = Path("../methode_Classique/calibration_results")
+    calib_base = Path("../methode_Classique/data_calibration")
     test_base = Path("../methode_Classique/test_results")
     
     X_zone1 = load_latest_features(calib_base, "X_zone1_features")

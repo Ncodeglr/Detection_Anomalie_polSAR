@@ -99,7 +99,7 @@ if __name__ == "__main__":
         loaders_2_2_parts.append(loader)
         print(f"   - Sous-zone {i+1} créée ({col_split_points[i]} -> {col_split_points[i+1]}) avec {len(loader.dataset)} patchs.")
 
-    base_calib_dir = Path("calibration_results")
+    base_calib_dir = Path("data_calibration")
     if not base_calib_dir.exists() or not list(base_calib_dir.glob("run_*")):
         print("[!] ERREUR: Aucun dossier de calibration H0 trouvé. Lancez H0.py en premier.")
         sys.exit(1)

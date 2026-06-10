@@ -10,10 +10,10 @@ class SyntheticParameterGenerator:
     La phase suit une distribution de Von Mises.
     """
     def __init__(self, 
-                 mean_db: float = -30.0, 
-                 std_dev_amp: float = 0.005,
-                 phase_mean_rad: float = math.pi / 4,  # loc (ex: 45 degrés)
-                 phase_concentration: float = 5.0):    # kappa
+                 mean_db: float = -22.49, 
+                 std_dev_amp: float = 0.001,
+                 phase_mean_rad: float = 0,  # loc (ex: 45 degrés)
+                 phase_concentration: float = 1e-5):    # kappa
         
         # --- Paramètres Amplitude ---
         self.mean_db = mean_db
