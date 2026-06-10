@@ -5,7 +5,7 @@ import numpy as np
 from typing import Union
 from torch.utils.data import DataLoader
 
-class Tensor_OOD_Detector:
+class OOD_Detector:
     def __init__(self, model, device="cpu"):
         """
         Détecteur OoD spatial conçu pour les modèles de segmentation (UNet).

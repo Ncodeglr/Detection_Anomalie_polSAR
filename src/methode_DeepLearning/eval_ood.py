@@ -17,7 +17,7 @@ from cvnn.data import get_dataloaders, get_full_image_dataloader
 from cvnn.models import UNet
 from cvnn.visualize import plot_latent_space
 
-from tensor_ood_detector import Tensor_OOD_Detector
+from methode_DeepLearning.ood_detector import OOD_Detector
 from anomalies import Crosstalk
 from synthetic_parameter_generator import SyntheticParameterGenerator
 
@@ -91,7 +91,7 @@ def main():
 
     #4. Calibration du détecteur sur la zone originelle
     print("\n[*] 3. Initialisation et Calibration du Détecteur OoD...")
-    detector = Tensor_OOD_Detector(model, device=device)
+    detector = OOD_Detector(model, device=device)
     detector.fit_mahalanobis(train_loader)
     
     pfa_target = 0.05
