@@ -6,14 +6,11 @@ task: "segmentation"
 
 # --- 1. Architecture du Modèle ---
 model:
-  name: "ComplexUnet"
-  num_channels: 4
+  class: UNet
   num_layers: 3
   channels_width: 16
-  input_size: 16
   activation: "CReLU" 
-  num_classes: 7 # 6 labels + 1 label de fond
-  num_blocks: 2
+  num_blocks: 3
   layer_mode: "complex"
   normalization_layer: "batch"
   downsampling_layer: "maxpool"
@@ -31,7 +28,7 @@ data:
     name: PolSFDataset
     trainpath: "./data/SAN_FRANCISCO_ALOS2"
     base_dir: "/home/nicolas/Documents/polSAR_Control/data"
-    patch_size: 32
+    patch_size: 64
     patch_stride: 16
   batch_size: 32
   num_workers: 2

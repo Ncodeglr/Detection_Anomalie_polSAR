@@ -57,6 +57,7 @@ def main():
     
     in_channels = data_cfg.get("inferred_input_channels", 4)
     input_size = data_cfg.get("inferred_input_size", data_cfg.get("dataset", {}).get("patch_size", 32))
+    num_classes = data_cfg.get("inferred_num_classes", model_cfg.get("num_classes", 7))
     
     model = UNet(
         num_channels = in_channels,
@@ -64,7 +65,7 @@ def main():
         channels_width = model_cfg.get("channels_width", 16),
         input_size = input_size,
         activation = model_cfg.get("activation", "CReLU"),
-        num_classes = model_cfg.get("num_classes", 7),
+        num_classes = num_classes,
         num_blocks = model_cfg.get("num_blocks", 1),
         layer_mode = model_cfg.get("layer_mode", "complex"),
         normalization_layer = model_cfg.get("normalization_layer", "batch"),
