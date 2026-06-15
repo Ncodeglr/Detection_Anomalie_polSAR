@@ -41,34 +41,52 @@ def setup_experiment_env(sys_argv, script_file_path, force_cpu=False):
 def get_test_loaders(config_base, use_cuda=False):
     """
     Génère les chargeurs de données pour la Zone 2.1 (Saine) et la Zone 2.2 (3 sous-zones).
-    Garantit que TOUTES les méthodes évaluent exactement les mêmes pixels.
+    Utilise un empilement vertical pour garantir que toutes les zones restent sur 
+    la terre ferme (Péninsule de San Francisco) et sous la limite des 8080 lignes de l'image.
     """
     config_test = copy.deepcopy(config_base)
     config_test["data"]["dataset"]["name"] = "ALOSDataset"
     config_test["data"]["recompute_statistics"] = False
 
-    # --- Zone 2.1 : Région Saine Non Vue ---
+    # ---------------------------------------------------------
+    # Zone 2.1 : Région Saine Non Vue 
+    # Lignes 3800 à 5800. Parfaitement sur la terre selon l'image.
+    # ---------------------------------------------------------
     config_unseen_sain = copy.deepcopy(config_test)
     config_unseen_sain["data"]["dataset"]["crop_coordinates"] = {
-        "start_row": 4000, "end_row": 6000,
-        "start_col": 2832, "end_col": 7888
+        "start_row": 3800, 
+        "end_row": 5800,
+        "start_col": 2832, 
+        "end_col": 7888
     }
     loader_test_2_1, _, _ = get_full_image_dataloader(config_unseen_sain, use_cuda=use_cuda)
 
-    # --- Division de la Zone 2.2 en 3 parties ---
-    col_split_points = np.linspace(10000, 15000, 4, dtype=int)
+    # ---------------------------------------------------------
+    # Zone 2.2 : Région pour Anomalies
+    # On descend juste en dessous de la zone 2.1 (Lignes 6000 à 8000).
+    # On s'arrête à 8000 pour ne pas dépasser la taille max de l'image (8080).
+    # ---------------------------------------------------------
+    start_row_2_2 = 6000
+    end_row_2_2 = 8000
+    
+    # Séparation exacte en 3 intervalles de lignes (verticalement)
+    row_split_points = np.linspace(start_row_2_2, end_row_2_2, 4, dtype=int)
     loaders_2_2_parts = []
+    
     for i in range(3):
         cfg_part = copy.deepcopy(config_test)
         cfg_part["data"]["dataset"]["crop_coordinates"] = {
-            "start_row": 4000, "end_row": 6000,
-            "start_col": int(col_split_points[i]), "end_col": int(col_split_points[i+1])
+            "start_row": int(row_split_points[i]), 
+            "end_row": int(row_split_points[i+1]),
+            "start_col": 2832, 
+            "end_col": 7888
         }
         loader, _, _ = get_full_image_dataloader(cfg_part, use_cuda=use_cuda)
         loaders_2_2_parts.append(loader)
 
     return loader_test_2_1, loaders_2_2_parts
 
+    
 def get_shared_anomaly_generator(config):
     """
     Garantit que toutes les méthodes génèrent rigoureusement les mêmes anomalies.

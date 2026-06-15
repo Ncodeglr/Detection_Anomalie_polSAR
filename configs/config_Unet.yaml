@@ -1,5 +1,5 @@
-# Configuration globale pour le pipeline de Détection d'Anomalies PolSAR
-# Approche Deep Learning (Unet Complexe)
+#Configuration globale pour le pipeline de Détection d'Anomalies PolSAR
+#Approche Deep Learning (Unet Complexe)
 
 seed: 42
 task: "segmentation"
@@ -8,9 +8,9 @@ task: "segmentation"
 model:
   class: UNet
   num_layers: 3
-  channels_width: 16
+  channels_width: 32
   activation: "CReLU" 
-  num_blocks: 3
+  num_blocks: 2
   layer_mode: "complex"
   normalization_layer: "batch"
   downsampling_layer: "maxpool"

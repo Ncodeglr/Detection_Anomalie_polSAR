@@ -27,7 +27,7 @@ def main():
     if len(sys.argv) >= 2:
         config_path = sys.argv[1]
     else:
-        config_path = str(repo_root / "configs" / "config.yaml")
+        config_path = str(repo_root / "configs" / "config_Unet.yaml")
         print(f"[*] Aucun fichier de configuration spécifié. Utilisation par défaut : {config_path}")
 
     config = load_config(config_path)
