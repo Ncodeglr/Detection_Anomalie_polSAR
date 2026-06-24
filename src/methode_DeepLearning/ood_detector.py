@@ -1,6 +1,8 @@
 import sys
 import os
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from typing import Union
 from torch.utils.data import DataLoader
@@ -14,13 +16,16 @@ class OOD_Detector:
         self.model.eval()
         self.device = device
         
-        # Paramètres de la distribution sémantique (Latent UNet)
+        # Paramètres de la distribution sémantique (Latent)
         self.mu_z = None
         self.inv_cov_z = None
         self.std_z = None
         self.threshold_z = None
         
-        # Paramètres de la distribution physique (PolSAR)
+        # Paramètres de réduction de dimension (PCA) pour le modèle sémantique
+        self.pca_mean_z = None
+        self.pca_components_z = None
+
         self.mu_p = None
         self.inv_cov_p = None
         self.std_p = None
@@ -43,14 +48,14 @@ class OOD_Detector:
         # --- 1. Caractéristiques Sémantiques (Latent du UNet) ---
         z = self.extract_latent(x) #[B, H, W, C]
         
-        z_mean = z.mean(dim=(1, 2)) #[B, C]
+        # On capture non seulement la valeur moyenne (la "couleur") mais aussi la variance spatiale (la "texture")
+        z_mean = z.mean(dim=(1, 2)) # [B, C], complexe
+        # torch.std sur un tenseur complexe retourne un tenseur réel.
+        # Pour capturer la variance des deux parties, on les calcule séparément.
+        z_std_real = z.real.std(dim=(1, 2)) # [B, C], réel
+        z_std_imag = z.imag.std(dim=(1, 2)) # [B, C], réel
         
-        # Variance spatiale (dispersion autour de la moyenne) pour détecter les instabilités du modèle
-        z_centered = z - z_mean.unsqueeze(1).unsqueeze(1)
-        z_var = (z_centered.real**2 + z_centered.imag**2).mean(dim=(1, 2)) #[B, C]
-        
-        z_energy = (z.real**2 + z.imag**2).mean(dim=(1, 2)) #[B, C]
-        z_features = torch.cat([z_mean.real, z_mean.imag, z_var, z_energy], dim=-1) #[B, 4 * C]
+        z_features = torch.cat([z_mean.real, z_mean.imag, z_std_real, z_std_imag], dim=-1) #[B, 4*C]
        
         # --- 2. Caractéristiques Physiques (Entrée PolSAR) ---
         B, C_in, H, W = x.shape
@@ -58,74 +63,38 @@ class OOD_Detector:
         
         gram = torch.bmm(x_flat, x_flat.conj().transpose(1, 2)) / (H * W) # [B, C_in, C_in]
             
-        power_per_channel = torch.diagonal(gram.real, dim1=1, dim2=2) # [B, C_in]
-
-        span = power_per_channel.sum(dim=1, keepdim=True) # [B, 1]
-        span_db = 10.0 * torch.log10(span + 1e-12)
-
-        power_copol = power_per_channel[:, 0] + power_per_channel[:, 3] # Puissance HH + VV
-        power_crosspol = power_per_channel[:, 1] + power_per_channel[:, 2] # Puissance HV + VH
+        # --- GÉOMÉTRIE RIEMANNIENNE (Log-Euclidienne) ---
+        # Projection de la matrice de Gram SPD dans son espace tangent via le log matriciel.
+        # Cela transforme l'espace courbé des covariances en un espace vectoriel plat
+        # où la distance de Mahalanobis redevient parfaitement valide, sans ingénierie manuelle.
         
-        cross_pol_ratio = (power_crosspol / (power_copol + 1e-12)).unsqueeze(1) # [B, 1]
-        cross_pol_ratio_db = 10.0 * torch.log10(cross_pol_ratio + 1e-12)
+        # Régularisation adaptative selon la puissance (trace) du patch.
+        # Empêche un epsilon fixe d'écraser les faibles corrélations de diaphonie (Crosstalk)
+        eps = 1e-6
+        trace = gram.diagonal(dim1=-2, dim2=-1).sum(dim=-1).real.clamp(min=1e-12)
+        eps_matrix = (eps * trace).view(B, 1, 1) * torch.eye(C_in, dtype=gram.dtype, device=gram.device).unsqueeze(0)
+        
+        gram_reg = gram + eps_matrix
+        
+        # 1. Décomposition en valeurs propres (pour matrice hermitienne)
+        eigvals, eigvecs = torch.linalg.eigh(gram_reg)
+        
+        # 2. Logarithme matriciel : log(G) = V * log(Lambda) * V^H
+        log_eigvals = torch.log(eigvals.clamp(min=1e-12)).to(gram.dtype)
+        log_gram = eigvecs @ torch.diag_embed(log_eigvals) @ eigvecs.conj().transpose(1, 2)
+        
+        # 3. Extraction du vecteur tangent : diagonale (réelle) et hors-diagonale (complexe)
+        diag_elems = torch.diagonal(log_gram.real, dim1=-2, dim2=-1)
+        triu_idx = torch.triu_indices(C_in, C_in, offset=1)
+        off_diag_elems = log_gram[:, triu_idx[0], triu_idx[1]]
 
-        if C_in == 4:
-            # --- NORMALISATION PARFAITE (Variables 100% Bornées et Indépendantes) ---
-            # Le problème de Mahalanobis est qu'une seule variable non bornée (ou colinéaire)
-            # détruit l'inverse de la matrice de covariance.
-            # En fournissant UNIQUEMENT des Cohérences (-1 à 1) et des ratios partiels,
-            # l'ellipsoïde appris est extrêmement dense, stable et hyper-sensible.
-            
-            eps_power = 1e-6
-            
-            # --- 1. BASE DE PAULI ---
-            k1 = (x_flat[:, 0, :] + x_flat[:, 3, :]) / 1.41421356
-            k2 = (x_flat[:, 0, :] - x_flat[:, 3, :]) / 1.41421356
-            k3 = (x_flat[:, 1, :] + x_flat[:, 2, :]) / 1.41421356
-            
-            T11 = torch.sum(k1 * k1.conj(), dim=-1).real / (H * W)
-            T22 = torch.sum(k2 * k2.conj(), dim=-1).real / (H * W)
-            T33 = torch.sum(k3 * k3.conj(), dim=-1).real / (H * W)
-            
-            T12 = torch.sum(k1 * k2.conj(), dim=-1) / (H * W)
-            T13 = torch.sum(k1 * k3.conj(), dim=-1) / (H * W)
-            T23 = torch.sum(k2 * k3.conj(), dim=-1) / (H * W)
-            
-            span_pauli = T11 + T22 + T33 + eps_power
-            
-            # --- 2. Ratios d'Énergie ---
-            r_T11 = (T11 / span_pauli).unsqueeze(1)
-            r_T22 = (T22 / span_pauli).unsqueeze(1)
-            # On ignore r_T33 car r_T11 + r_T22 + r_T33 = 1 (Évite la Singularité Mathématique)
-            
-            # --- 3. Cohérences Complexes de Pauli (Le "Graal" du Crosstalk) ---
-            # Sous Crosstalk, l'erreur (Delta) se concentre massivement et uniquement sur T13 et T23.
-            def pauli_coherence(T_ij, T_ii, T_jj):
-                return (T_ij / (torch.sqrt(T_ii * T_jj) + eps_power)).unsqueeze(1)
-                
-            coh_13 = pauli_coherence(T13, T11, T33) # Explose statistiquement sous l'anomalie
-            coh_23 = pauli_coherence(T23, T22, T33)
-            
-            # --- 4. Réciprocité et Contexte ---
-            cov_hv_vh = gram[:, 1, 2].unsqueeze(1)
-            p_hv = power_per_channel[:, 1:2]
-            p_vh = power_per_channel[:, 2:3]
-            coh_hv_vh = cov_hv_vh / (torch.sqrt(p_hv * p_vh) + eps_power)
-            imbalance = (p_hv - p_vh) / (p_hv + p_vh + eps_power)
-            
-            phys_features = torch.cat([
-                r_T11, r_T22,
-                coh_13.real, coh_13.imag,
-                coh_23.real, coh_23.imag,
-                coh_hv_vh.real, coh_hv_vh.imag,
-                imbalance
-            ], dim=-1) # [B, 9] Le vecteur minimal absolu et suffisant pour Mahalanobis
-        else:
-            eigvals = torch.linalg.eigvalsh(gram).abs()
-            eigvals_db = 10.0 * torch.log10(eigvals + 1e-12)
-            phys_features = torch.cat([span_db, eigvals_db], dim=-1)
+        p_features = torch.cat([
+            diag_elems,
+            off_diag_elems.real,
+            off_diag_elems.imag
+        ], dim=-1)
 
-        return z_features, phys_features
+        return z_features, p_features
 
     def get_latent_features(self, x):
         """
@@ -141,8 +110,8 @@ class OOD_Detector:
         std = torch.std(features, dim=0)
         
         # Pour garantir qu'une variable à variance quasi-nulle puisse exploser sous anomalie, 
-        # mais éviter le crash de l'inversion de matrice, on limite à 1e-5.
-        std_safe = torch.clamp(std, min=1e-5)
+        # mais éviter le crash de l'inversion de matrice, on limite à 1e-8 (pas 1e-5 pour les cross-pol).
+        std_safe = torch.clamp(std, min=1e-8)
         
         scaled = (features - mu) / std_safe
         cov = torch.cov(scaled.T) + eps * torch.eye(features.shape[1], dtype=features.dtype, device=features.device)
@@ -156,7 +125,7 @@ class OOD_Detector:
         # --- Passe 2 : Fit sur données purifiées ---
         mu_robust = torch.mean(clean_features, dim=0)
         std_robust = torch.std(clean_features, dim=0)
-        std_safe_robust = torch.clamp(std_robust, min=1e-5)
+        std_safe_robust = torch.clamp(std_robust, min=1e-8)
         
         scaled_robust = (clean_features - mu_robust) / std_safe_robust
         cov_robust = torch.cov(scaled_robust.T) + eps * torch.eye(clean_features.shape[1], dtype=clean_features.dtype, device=clean_features.device)
@@ -182,12 +151,33 @@ class OOD_Detector:
         all_z = torch.cat(all_z, dim=0)
         all_p = torch.cat(all_p, dim=0)
         
-        print(f"   -> Modèle Sémantique ({all_z.shape[1]} dims) et Physique ({all_p.shape[1]} dims)...")
-        
         # --- Modèle Sémantique (Z) ---
-        self.mu_z, self.std_z, self.inv_cov_z = self._robust_fit(all_z, eps)
+        # --- NOUVEAUTÉ : Réduction de Dimension (PCA) du Modèle Sémantique ---
+        # Avec 512 dimensions, la distance de Mahalanobis accumule trop de bruit (Fléau de la dimension).
+        # Une PCA permet de concentrer l'énergie sur les composantes principales et de stabiliser l'inversion.
+        self.pca_mean_z = all_z.mean(dim=0)
+        centered_z = all_z - self.pca_mean_z
+        
+        # Calcul de la matrice de covariance pour la PCA
+        cov_z_pca = torch.cov(centered_z.T)
+        eigvals_z, eigvecs_z = torch.linalg.eigh(cov_z_pca)
+        
+        # Tri des valeurs/vecteurs propres par ordre décroissant
+        eigvals_z = eigvals_z.flip(dims=[0])
+        eigvecs_z = eigvecs_z.flip(dims=[1])
+        
+        # On conserve les composantes expliquant 95% de la variance, avec un maximum de 64 dimensions
+        explained_var = torch.cumsum(eigvals_z.clamp(min=0), dim=0) / eigvals_z.clamp(min=0).sum()
+        k_95 = torch.searchsorted(explained_var, 0.95).item() + 1
+        k = min(k_95, 64)
+        
+        self.pca_components_z = eigvecs_z[:, :k]
+        all_z_pca = torch.matmul(centered_z, self.pca_components_z)
+        print(f"   -> Modèle Sémantique réduit par PCA : {all_z.shape[1]} -> {k} dims")
+        self.mu_z, self.std_z, self.inv_cov_z = self._robust_fit(all_z_pca, eps)
         
         # --- Modèle Physique (P) ---
+        print(f"   -> Fitting Modèle Physique : {all_p.shape[1]} dims")
         self.mu_p, self.std_p, self.inv_cov_p = self._robust_fit(all_p, eps)
 
     def compute_scores(self, x):
@@ -195,17 +185,24 @@ class OOD_Detector:
         Calcule les deux distances séparément.
         """
         x = x.to(self.device)
-        
+
         with torch.no_grad():
             z_f, p_f = self._get_features(x)
             
+            # --- Projection PCA Sémantique ---
+            if self.pca_components_z is not None:
+                z_f_pca = torch.matmul(z_f.cpu() - self.pca_mean_z, self.pca_components_z)
+            else: # Fallback si la PCA n'a pas été fittée
+                z_f_pca = z_f.cpu()
+            p_f_cpu = p_f.cpu()
+            
             # Mahalanobis Sémantique
-            delta_z = (z_f.cpu() - self.mu_z) / self.std_z 
+            delta_z = (z_f_pca - self.mu_z) / self.std_z 
             mah_dist_sq_z = torch.einsum('bi,ij,bj->b', delta_z, self.inv_cov_z, delta_z)
             mah_dist_z = torch.sqrt(torch.relu(mah_dist_sq_z))
             
             # Mahalanobis Physique
-            delta_p = (p_f.cpu() - self.mu_p) / self.std_p 
+            delta_p = (p_f_cpu - self.mu_p) / self.std_p
             mah_dist_sq_p = torch.einsum('bi,ij,bj->b', delta_p, self.inv_cov_p, delta_p)
             mah_dist_p = torch.sqrt(torch.relu(mah_dist_sq_p))
             
@@ -216,12 +213,21 @@ class OOD_Detector:
         
         for batch in valid_loader:
             x = batch[0] if isinstance(batch, (list, tuple)) else batch
-            mah_z, mah_p = self.compute_scores(x)
+            # Note: compute_scores retourne des numpy arrays
+            mah_z, mah_p = self.compute_scores(x.to(self.device))
             all_mah_z.append(mah_z)
             all_mah_p.append(mah_p)
             
-        self.threshold_z = np.quantile(np.concatenate(all_mah_z), 1 - pfa)
-        self.threshold_p = np.quantile(np.concatenate(all_mah_p), 1 - pfa)
+        mah_z_arr = np.concatenate(all_mah_z)
+        mah_p_arr = np.concatenate(all_mah_p)
+        
+        # 1. On calcule les seuils initiaux pour chaque expert indépendamment
+        thresh_z_init = np.quantile(mah_z_arr, 1 - pfa) + 1e-12
+        thresh_p_init = np.quantile(mah_p_arr, 1 - pfa) + 1e-12
+        
+        # On les stocke pour la normalisation pendant la détection
+        self.threshold_z = thresh_z_init
+        self.threshold_p = thresh_p_init
         
         # Retourne le max des deux pour l'affichage console dans les autres scripts
         self.threshold_latent = max(self.threshold_z, self.threshold_p)
@@ -235,15 +241,25 @@ class OOD_Detector:
         
         for batch in test_loader:
             x = batch[0] if isinstance(batch, (list, tuple)) else batch
+            x = x.to(self.device)
+            
+            with torch.no_grad():
+                # --- 1. Calcul des scores bruts pour les deux experts ---
+                mah_z_np, mah_p_np = self.compute_scores(x)
+
+                # --- 2. Normalisation des scores pour les rendre comparables ---
+                score_z = mah_z_np / (self.threshold_z + 1e-12)
+                score_p = mah_p_np / (self.threshold_p + 1e-12)
+
+                # --- 3. Stratégie de fusion hiérarchique ---
+                # On initialise le score final avec le score sémantique.
+                score_final = score_z
                 
-            mah_z, mah_p = self.compute_scores(x)
-            
-            score_z = mah_z / (self.threshold_z + 1e-12)
-            score_p = mah_p / (self.threshold_p + 1e-12)
-            
-            # DÉTECTEUR ENSEMBLE : Le score final est le MAX. 
-            # L'anomalie est signalée si c'est une bizarrerie sémantique OU physique.
-            score_final = np.maximum(score_z, score_p)
+                # On identifie les patchs que l'expert sémantique a jugés "sains" (score < 1.0)
+                semantic_pass_mask = score_z < 1.0
+                
+                # Pour ces patchs uniquement, on remplace leur score par celui de l'expert physique.
+                score_final[semantic_pass_mask] = score_p[semantic_pass_mask]
             
             all_preds.append((score_final > 1.0).astype(int))
             all_scores.append(score_final)

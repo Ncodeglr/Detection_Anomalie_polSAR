@@ -63,6 +63,8 @@ Pour garantir une comparaison juste et reproductible, toutes les méthodes s'app
 
 Le workflow se déroule en 3 étapes séquentielles.
 
+### Workflow Principal : Basé sur UNet
+
 ### Étape 1 : Entraînement du modèle Deep Learning
 
 Le modèle UNet doit être entraîné en premier, car ses poids sont utilisés par le pipeline d'évaluation Deep Learning.
@@ -72,7 +74,7 @@ Le modèle UNet doit être entraîné en premier, car ses poids sont utilisés p
 cd src/methode_DeepLearning
 
 # Lancer l'entraînement du UNet sur la Zone 1
-python3 train_unet.py
+python3 train_unet.py ../../configs/config_Unet.yaml
 ```
 Les poids du meilleur modèle sont sauvegardés dans `src/methode_DeepLearning/Unet_results/`.
 

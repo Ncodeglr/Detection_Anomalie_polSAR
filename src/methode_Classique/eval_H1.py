@@ -1,63 +1,28 @@
 import sys
 import os
-import copy
 import torch
-import math 
 import datetime
 import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 
-# Ajout des chemins pour importer vos modules
+#Ajout des chemins pour importer vos modules
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "cvnn", "src"))
 sys.path.append(os.path.dirname(__file__))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from shared_setup import setup_experiment_env, get_test_loaders, get_shared_anomaly_generator
-
-# Import depuis vos propres scripts
-from feature_extraction import compute_batched_global_covariance, extract_batched_correlation_features, extract_features_from_loader
+from feature_extraction import extract_features_from_loader
 from H0 import DepthCalibrator
 from H1 import Crosstalk
 
 
-# ==============================================================================
-# 2. EXTRACTEUR AVEC CORRUPTION
-# ==============================================================================
-
-def extract_anomalous_features(dataloader, anomaly_generator, desc="Extraction H1"):
-    """ 
-    Extrait les caractéristiques (16 Features) après avoir altéré physiquement 
-    les matrices de covariance du flux de données.
-    """
-    X_list = []
-
-    for batch in tqdm(dataloader, desc=f"[{anomaly_generator.name}]"):
-        # Gestion du format de batch
-        if isinstance(batch, (list, tuple)): inputs = batch[0]
-        elif isinstance(batch, dict): inputs = batch.get("inputs", batch.get("data"))
-        else: inputs = batch
-            
-        x_np = inputs.cpu().numpy()
-        
-        #1. Calcul de la covariance pure
-        mat_C_batched = compute_batched_global_covariance(x_np)
-        
-        #2. Injection du Crosstalk sur les matrices de covariance
-        mat_C_corrupted = anomaly_generator.apply_corruption(mat_C_batched)
-        
-        #3. Extraction des corrélations altérées
-        features_batched = extract_batched_correlation_features(mat_C_corrupted)
-        X_list.append(features_batched)
-
-    return np.vstack(X_list)
-
 if __name__ == "__main__":
     print("\n[*] Récupération des statistiques depuis la Zone 1...")
-    cfg, config_polsf, _, _ = setup_experiment_env(sys.argv, __file__, force_cpu=True)
+    cfg, config_base, _, _ = setup_experiment_env(sys.argv, __file__, force_cpu=True)
 
     print("\n[*] Chargement des zones 2.1 et 2.2 pour les tests...")
-    loader_test_2_1, loaders_2_2_parts = get_test_loaders(config_polsf, use_cuda=False)
+    loader_test_2_1, loaders_2_2_parts = get_test_loaders(config_base, use_cuda=False)
     print(f"   -> Zone 2.1 (Saine)    : {len(loader_test_2_1.dataset)} patchs")
     for i, loader in enumerate(loaders_2_2_parts):
         print(f"   -> Zone 2.2 (Part {i+1}) : {len(loader.dataset)} patchs")
@@ -124,7 +89,11 @@ if __name__ == "__main__":
         anomalies_info[anomaly_log_name] = str(anomaly.delta)
 
         print(f"\n[*] Injection de l'anomalie sur {anomaly_name} : {anomaly_type} ({anomaly.name})")
-        X_test_h1 = extract_anomalous_features(loader_part, anomaly)
+        X_test_h1 = extract_features_from_loader(
+            loader_part,
+            desc=f"Injection {anomaly_type} sur {anomaly_name}",
+            anomaly_generator=anomaly
+        )
         
         #Calcul des scores d'anomalies
         depth_scores = DepthCalibrator().load_and_score(X_test_h1, calib_dir)

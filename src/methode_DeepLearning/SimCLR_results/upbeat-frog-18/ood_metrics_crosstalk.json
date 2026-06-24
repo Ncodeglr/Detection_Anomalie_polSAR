@@ -1,0 +1,24 @@
+{
+    "pfa_target": 0.05,
+    "Zone_2_1_Saine": {
+        "pfa_observed": 0.13984905660377359
+    },
+    "Zone_2_2_Saine": {
+        "pfa_observed": 0.042026666666666664
+    },
+    "Zone_2_2_Part_1_Crosstalk": {
+        "delta": "(0.01928570680320263+0.05380478501319885j)",
+        "detection_rate": 0.52,
+        "auc_roc": 0.8966525440000002
+    },
+    "Zone_2_2_Part_2_Crosstalk": {
+        "delta": "(0.04256175458431244-0.048173606395721436j)",
+        "detection_rate": 0.50464,
+        "auc_roc": 0.9190096213333333
+    },
+    "Zone_2_2_Part_3_Crosstalk": {
+        "delta": "(0.02920691668987274+0.02105259709060192j)",
+        "detection_rate": 0.18112,
+        "auc_roc": 0.8520686933333333
+    }
+}

@@ -48,7 +48,7 @@ def extract_batched_correlation_features(C_batched: np.ndarray) -> np.ndarray:
 
     return np.stack(features, axis=1)
 
-def extract_features_from_loader(dataloader, desc="Extraction"):
+def extract_features_from_loader(dataloader, desc="Extraction", anomaly_generator=None):
     """ Construit la matrice X (Features) à partir d'un DataLoader. """
     X_list = []
 
@@ -64,6 +64,9 @@ def extract_features_from_loader(dataloader, desc="Extraction"):
         x_np = inputs.cpu().numpy()
         
         mat_C_batched = compute_batched_global_covariance(x_np)
+        if anomaly_generator:
+            mat_C_batched = anomaly_generator.apply_corruption(mat_C_batched)
+            
         features_batched = extract_batched_correlation_features(mat_C_batched)
         
         X_list.append(features_batched)

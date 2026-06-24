@@ -5,7 +5,7 @@ import datetime
 import numpy as np
 from pathlib import Path
 
-# Ajout des chemins pour importer vos modules cvnn et l'extracteur local
+#Ajout des chemins pour importer vos modules cvnn et l'extracteur local
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "cvnn", "src"))
 sys.path.append(os.path.dirname(__file__))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -39,10 +39,20 @@ if __name__ == "__main__":
     depth_calib = DepthCalibrator(dim=X_train.shape[1])
     train_scores = depth_calib.calibrate(X_train)
     depth_calib.save(out_dir, train_scores) #Sauvegarde les matrices et Train_Depth_Scores.npy
-    
+    print("Shape des scores sur le Train :", train_scores.shape)
+    print("Exemples de scores sur le Train :")
+    for i in range(5):
+        print(f"Score Train [{i}] : {train_scores[i]}")
+
+
+
     #4. Calibration du seuil sur le Valid
     print("\n[*] Évaluation sur le Valid pour calibration future du seuil...")
     valid_scores = depth_calib.score_batched(X_valid)
+    print("Shape des scores sur le Valid :", valid_scores.shape)
+    print("Exemples de scores sur le Valid :")
+    for i in range(5):
+        print(f"Score Valid [{i}] : {valid_scores[i]}")
     np.save(out_dir / "Valid_Depth_Scores.npy", valid_scores)
 
     print(f"\n[+] Calibration H0 terminée avec succès. Résultats sauvés dans '{out_dir}/'")

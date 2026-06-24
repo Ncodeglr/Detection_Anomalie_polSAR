@@ -13,7 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "cvnn", "src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from shared_setup import setup_experiment_env, get_test_loaders, get_shared_anomaly_generator
-from cvnn.models import UNet
+from cvnn.models import AutoEncoder
 from cvnn.visualize import plot_latent_space
 
 from methode_DeepLearning.ood_detector import OOD_Detector
@@ -29,41 +29,38 @@ def main():
     print(f"[*] Fichier cible (Doit être l'image complète ALOS2 8080x22608) : {config['data']['dataset']['trainpath']}")
 
     #3. Chargement du modèle UNet
-    print("\n[*] 2. Chargement du modèle UNet pré-entraîné...")
+    print("\n[*] 2. Chargement du modèle AutoEncoder t pré-entraîné...")
     model_cfg = config.get("model", {})
     data_cfg = config.get("data", {})
     in_channels = data_cfg.get("inferred_input_channels", 4)
-    input_size = data_cfg.get("inferred_input_size", data_cfg.get("dataset", {}).get("patch_size", 32))
-    num_classes = data_cfg.get("inferred_num_classes", model_cfg.get("num_classes", 7))
+    input_size = data_cfg.get("inferred_input_size", data_cfg.get("dataset", {}).get("patch_size", 32))    
     
-    model = UNet(
+    model = AutoEncoder(
         num_channels=in_channels,
-        num_layers=model_cfg.get("num_layers", 3),
+        num_layers=model_cfg.get("num_layers", 4),
         channels_width=model_cfg.get("channels_width", 16),
         input_size=input_size,
-        activation=model_cfg.get("activation", "CRelu"),
-        num_classes=num_classes,
-        num_blocks=model_cfg.get("num_blocks", 1),
+        activation=model_cfg.get("activation", "relu"),
+        upsampling_layer=model_cfg.get("upsampling_layer", "conv_transpose"),
         layer_mode=model_cfg.get("layer_mode", "complex"),
         normalization_layer=model_cfg.get("normalization_layer", "batch"),
-        downsampling_layer=model_cfg.get("downsampling_layer", "maxpool"),
-        upsampling_layer=model_cfg.get("upsampling_layer", "nearest"),
-        residual=model_cfg.get("residual", True),
-        projection_layer=model_cfg.get("projection_layer", "amplitude")
+        residual=model_cfg.get("residual", False),
+        num_blocks=model_cfg.get("num_blocks", 1),
+        latent_dim=model_cfg.get("latent_dim", 128)
     ).to(device)
 
-    results_dir = Path("Unet_results")
+    results_dir = Path("DL_results")
     if not results_dir.exists():
         print(f"[!] ERREUR: Le dossier '{results_dir}' n'existe pas.")
         sys.exit(1)
 
-    run_dirs = [d for d in results_dir.iterdir() if d.is_dir() and (d / "best_weights_unet.pt").exists()]
+    run_dirs = [d for d in results_dir.iterdir() if d.is_dir() and (d / "best_weights_autoencoder.pt").exists()]
     if not run_dirs:
-        print("[!] ERREUR: Aucun modèle valide trouvé.")
+        print(f"[!] ERREUR: Aucun modèle 'best_weights_autoencoder.pt' trouvé dans les sous-dossiers de {results_dir}.")
         sys.exit(1)
 
     latest_run_dir = max(run_dirs, key=os.path.getmtime)
-    model.load_state_dict(torch.load(latest_run_dir / "best_weights_unet.pt", map_location=device))
+    model.load_state_dict(torch.load(latest_run_dir / "best_weights_autoencoder.pt", map_location=device))
     print(f"   [+] Poids chargés depuis {latest_run_dir.name}")
 
     #4. Calibration du détecteur sur la zone originelle
@@ -202,27 +199,6 @@ def main():
         base_ds.transform = original_transform
         
     print("-" * 65)
-
-    # 9. Visualisation de l'espace latent pour comparer Région Saine (Non vue) et Crosstalk
-    print(f"\n[*] 6. Visualisation de l'espace latent (PCA)...")
-    Z_c, Z_a = torch.cat(latents_clean, dim=0), torch.cat(latents_ano_all, dim=0)
-    Z_all = torch.cat([Z_c, Z_a], dim=0)
-    labels_all = np.concatenate([np.zeros(len(Z_c)), np.ones(len(Z_a))])
-    
-    fig_latent = plot_latent_space(
-        latents=Z_all, labels=labels_all, method="pca", 
-        classes_names={0: "ALOS2 Sain (Non Vu)", 1: "ALOS2 + Crosstalk (Mix 3 zones)"}
-    )
-    
-    save_path_latent = latest_run_dir / "latent_space_alos2_unseen.png"
-    fig_latent.savefig(save_path_latent, bbox_inches="tight", dpi=300)
-    plt.close(fig_latent)
-    print(f"   [+] PCA sauvegardée : {save_path_latent}")
-    
-    metrics_path = latest_run_dir / "ood_metrics_alos2_unseen.json"
-    with open(metrics_path, "w") as f:
-        json.dump(ood_metrics, f, indent=4)
-    print(f"   [+] Métriques OoD sauvegardées : {metrics_path}")
 
 if __name__ == "__main__":
     main()

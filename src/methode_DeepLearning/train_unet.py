@@ -4,14 +4,15 @@ from pathlib import Path
 import torch
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-import wandb
 
 # Ajout des chemins pour importer les modules du projet
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "cvnn", "src"))
+# Import du module partagé du projet (comme dans SimCLR)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from cvnn.config import load_config
+from shared_setup import setup_experiment_env
+
 from cvnn.utils import set_seed
-from cvnn.data import get_dataloaders
 from cvnn.models import UNet
 from cvnn.train import setup_loss_optimizer
 from cvnn.schedulers import build_schedulers, step_schedulers
@@ -20,44 +21,36 @@ from cvnn.wandb_utils import setup_wandb, log_config_summary, log_metrics, finis
 
 def main():
     print("[*] Démarrage de l'entraînement du UNet Complexe")
-    repo_root = Path(__file__).resolve().parents[2] # Chemin absolu vers la racine du projet
     
-    #1. Configuration des chemins et paramètres via load_config de CVNN
-    if len(sys.argv) >= 2:
-        config_path = sys.argv[1]
-    else:
-        config_path = str(repo_root / "configs" / "config_Unet.yaml")
-        print(f"[*] Aucun fichier de configuration spécifié. Utilisation par défaut : {config_path}")
+    # 1. & 2. Chargement unifié de la configuration et des données (Même logique que SimCLR)
+    print("[*] Configuration de l'environnement et chargement des données...")
+    config, config_base, device, loaders = setup_experiment_env(
+        sys.argv, 
+        __file__, 
+        force_cpu=False, 
+        default_config="config_Unet.yaml" # Fichier par défaut adapté au UNet
+    )
+    train_loader, valid_loader, _ = loaders
 
-    config = load_config(config_path)
-    set_seed(config.get("seed", 42))
-
-    #Résolution absolue du chemin des données par rapport à la racine du projet
-    trainpath = Path(config["data"]["dataset"]["trainpath"])
-    if not trainpath.is_absolute():
-        config["data"]["dataset"]["trainpath"] = str((repo_root / trainpath).resolve())
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[*] Matériel détecté : {device}")
-
-    #2. Initialisation de Weights & Biases (via l'API CVNN) 
+    # 3. Initialisation de Weights & Biases (via l'API CVNN) 
     wandb_log, run_name = setup_wandb(config)
     log_config_summary(wandb_log, config)
 
-    #3. Chargement Modulaire des Données (Dataloaders)
-    print("[*] Chargement des données (Image entière)...")
-    # On supprime les coordonnées de découpe héritées du config.yaml global pour utiliser l'image complète
-    config["data"]["dataset"].pop("crop_coordinates", None)
-    
-    train_loader, valid_loader, _  = get_dataloaders(config, device)
-
-    #4. Initialisation du Modèle (UNET de CVNN)
-    model_cfg = config.get("model", {})
-    data_cfg = config.get("data", {})
+    # 4. Initialisation du Modèle (UNET de CVNN)
+    # On utilise config_base comme dans le script SimCLR
+    model_cfg = config_base.get("model", {})
+    data_cfg = config_base.get("data", {})
     
     in_channels = data_cfg.get("inferred_input_channels", 4)
     input_size = data_cfg.get("inferred_input_size", data_cfg.get("dataset", {}).get("patch_size", 32))
     num_classes = data_cfg.get("inferred_num_classes", model_cfg.get("num_classes", 7))
+    
+    # =========================================================
+    # [+] AJOUT ICI : On force l'injection pour satisfaire CVNN
+    # =========================================================
+    config_base.setdefault("model", {})
+    config_base["model"]["inferred_num_classes"] = num_classes
+    # =========================================================
     
     model = UNet(
         num_channels = in_channels,
@@ -78,16 +71,15 @@ def main():
         gumbel_softmax = model_cfg.get("gumbel_softmax", None)
     ).to(device)
 
-
     init_weights_mode_aware(model, model_cfg.get("layer_mode", "complex"))
 
-    #5. Setup de la Loss et de l'Optimiseur (repository CVNN)
-    loss_fn, optimizer = setup_loss_optimizer(model, config, train_loader.dataset, device)
+    # 5. Setup de la Loss et de l'Optimiseur (repository CVNN)
+    loss_fn, optimizer = setup_loss_optimizer(model, config_base, train_loader.dataset, device)
 
-    # Initialisation du scheduler défini dans config.yaml (ex: ReduceLROnPlateau)
-    warmup_scheduler, scheduler = build_schedulers(optimizer, config, len(train_loader))
+    # Initialisation du scheduler défini dans config.yaml
+    warmup_scheduler, scheduler = build_schedulers(optimizer, config_base, len(train_loader))
     
-    epochs = config.get("epochs", 50)
+    epochs = config_base.get("epochs", 50)
     best_val_loss = float('inf')
     
     # Dossier de sauvegarde du meilleur modèle
@@ -95,30 +87,24 @@ def main():
     save_dir.mkdir(parents=True, exist_ok=True)
     best_model_name = "best_weights_unet.pt"
 
-
-    #6. Training Loop
+    # 6. Training Loop
+    print(f"[*] Début de l'entraînement sur {epochs} epochs...")
     for epoch in range(epochs):
         model.train()
         train_loss = 0.0
         
         loop = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs} [TRAIN]")
-        for x_batch, y_batch in loop:
-            # Extraction robuste des inputs selon le format retourné par CVNN
-            x_batch = x_batch if isinstance(x_batch, torch.Tensor) else x_batch[0]
-            y_batch = y_batch if isinstance(y_batch, torch.Tensor) else y_batch[0]
+        for batch in loop:
+            x_batch = batch[0] if isinstance(batch, (list, tuple)) else batch
             x_batch = x_batch.to(device)
-            y_batch = y_batch.to(device, dtype=torch.long)
             
             optimizer.zero_grad()
             outputs = model(x_batch)
             
-            _, outputs_projected = outputs if isinstance(outputs, (tuple, list)) and len(outputs) == 2 else (None, outputs)
-            loss_output = loss_fn(outputs_projected, y_batch)
+            # Pour une tâche de reconstruction, la cible est l'entrée elle-même.
+            loss_output = loss_fn(outputs, x_batch)
             
-            #A. Extraction robuste (Gestion repository CVNN)
-            loss = loss_output[0] if isinstance(loss_output, tuple) else loss_output # CVNN peut retourner (loss, metrics_dict) ou juste loss
-            
-            #B. Sécurité anti-divergence (NaN)
+            loss = loss_output[0] if isinstance(loss_output, tuple) else loss_output
             if not torch.isnan(loss):
                 loss.backward()
                 optimizer.step()
@@ -127,28 +113,22 @@ def main():
             
         avg_train_loss = train_loss / len(train_loader)
         
-        #7. Validation Loop
+        # 7. Validation Loop
         model.eval()
         val_loss = 0.0
         
         val_loop = tqdm(valid_loader, desc=f"Epoch {epoch+1}/{epochs} [VALID]")
         with torch.no_grad():
-            for x_batch, y_batch in val_loop:
-                # Extraction robuste des inputs selon le format retourné par CVNN
-                x_batch = x_batch if isinstance(x_batch, torch.Tensor) else x_batch[0]
-                y_batch = y_batch if isinstance(y_batch, torch.Tensor) else y_batch[0]
+            for batch in val_loop:
+                x_batch = batch[0] if isinstance(batch, (list, tuple)) else batch
                 x_batch = x_batch.to(device)
-                y_batch = y_batch.to(device, dtype=torch.long)
                 
                 outputs = model(x_batch)
                 
-                _, outputs_projected = outputs if isinstance(outputs, (tuple, list)) and len(outputs) == 2 else (None, outputs)
-                loss_output = loss_fn(outputs_projected, y_batch)
+                # La cible est l'entrée elle-même
+                loss_output = loss_fn(outputs, x_batch)
                 
-                #A. Extraction robuste
                 loss = loss_output[0] if isinstance(loss_output, tuple) else loss_output
-                
-                #B. Sécurité anti-divergence
                 if not torch.isnan(loss):
                     val_loss += loss.item()
                     val_loop.set_postfix(loss=loss.item())
@@ -156,8 +136,7 @@ def main():
         avg_val_loss = val_loss / len(valid_loader)
         print(f"➡️ Bilan Epoch {epoch+1} : Train Loss = {avg_train_loss:.6f} | Val Loss = {avg_val_loss:.6f}")
         
-        
-        step_schedulers(warmup=None, scheduler=scheduler, metric=avg_val_loss) #Mise à jour du learning rate scheduler
+        step_schedulers(warmup=None, scheduler=scheduler, metric=avg_val_loss) # Mise à jour du learning rate scheduler
         
         # --- 8. Enregistrement des logs sur WandB ---
         log_metrics(wandb_log, {"loss": avg_train_loss}, step=epoch+1, prefix="training")
@@ -171,7 +150,7 @@ def main():
 
     # Fermeture propre de W&B
     finish_wandb_run()
-    print("[*] Entraînement terminé.")
+    print("\n[+] Entraînement terminé.")
 
 if __name__ == "__main__":
     main()

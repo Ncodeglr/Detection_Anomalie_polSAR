@@ -2,15 +2,15 @@
 #Approche Deep Learning (Unet Complexe)
 
 seed: 42
-task: "segmentation"
+task: "reconstruction"
 
 # --- 1. Architecture du Modèle ---
 model:
-  class: UNet
+  class: AutoEncoder
   num_layers: 3
   channels_width: 32
   activation: "CReLU" 
-  num_blocks: 2
+  num_blocks: 1
   layer_mode: "complex"
   normalization_layer: "batch"
   downsampling_layer: "maxpool"
@@ -25,12 +25,12 @@ model:
 # --- 2. Configuration des Données ---
 data:
   dataset:
-    name: PolSFDataset
+    name: ALOSDataset
     trainpath: "./data/SAN_FRANCISCO_ALOS2"
     base_dir: "/home/nicolas/Documents/polSAR_Control/data"
     patch_size: 64
-    patch_stride: 16
-  batch_size: 32
+    patch_stride: 32
+  batch_size: 64
   num_workers: 2
   valid_ratio: 0.1
   test_ratio: 0.1
@@ -38,11 +38,11 @@ data:
 
 # --- 3. Type de loss ---
 loss:
-  name: "FocalLoss"
-  use_class_weights: true
-  weight_mode: "balanced"
-  gamma: 2.0
-  ignore_index : 0    
+  name: "MSE"
+  use_class_weights: false
+  #weight_mode: "balanced"
+  #gamma: 2.0
+  #ignore_index : 0    
 
 
 
