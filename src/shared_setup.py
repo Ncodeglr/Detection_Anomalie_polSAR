@@ -28,7 +28,7 @@ ZONES_CONFIG = {
     }
 }
 
-def setup_experiment_env(sys_argv, script_file_path, force_cpu=False, default_config="config_Unet.yaml"):
+def setup_experiment_env(sys_argv, script_file_path, force_cpu=False, default_config="config.yaml"):
     """
     Initialise l'environnement de l'expérience d'entraînement/validation.
     Force l'utilisation de la Zone 1 globale pour éviter toute erreur de YAML.

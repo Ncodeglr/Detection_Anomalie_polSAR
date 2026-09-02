@@ -25,7 +25,7 @@ def main():
         sys.argv, 
         __file__, 
         force_cpu=False, 
-        default_config="config_Unet.yaml"
+        default_config="config.yaml"
     )
     train_loader, valid_loader, _ = loaders
 
@@ -33,7 +33,7 @@ def main():
     wandb_log, run_name = setup_wandb(config)
     log_config_summary(wandb_log, config)
     
-    #4. Initialisation du Modèle (LatentAutoEncoder de CVNN)
+    #4. Initialisation du Modèle (AutoEncoder de CVNN)
     model_cfg = config_base.get("model", {})
     data_cfg = config_base.get("data", {})
     in_channels = data_cfg.get("inferred_input_channels", 4)

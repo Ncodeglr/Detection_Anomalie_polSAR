@@ -243,7 +243,7 @@ def generate_visualizations(model, test_loader, full_loader, n_rows, n_cols, ori
 def main():
     print("[*] Initialisation du script...")
     repo_root = Path(__file__).resolve().parents[2]
-    config_path = sys.argv[1] if len(sys.argv) >= 2 else str(repo_root / "configs" / "config_Unet.yaml")
+    config_path = sys.argv[1] if len(sys.argv) >= 2 else str(repo_root / "configs" / "config.yaml")
         
     config = load_config(config_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
