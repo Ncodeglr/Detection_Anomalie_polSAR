@@ -9,14 +9,20 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+build/
+dist/
+*.egg-info/
 
-# Données et Checkpoints
+# Données et checkpoints
 datasets/
 data/
 checkpoints/
 *.pt
 *.pth
 *.npy
+*.npz
+*.pkl
+*.joblib
 
 # Logs et Slurm
 logs/
@@ -35,15 +41,18 @@ job.sbatch
 .idea/
 *.swp
 .DS_Store
+.ipynb_checkpoints/
+
+# Claude Code (préférences locales)
+.claude/settings.local.json
 
 # Pytest
 .pytest_cache/
 
-# Résultats générés (Méthodes classiques, ML, etc.)
+# Résultats générés (méthodes Classique, Deep Learning, legacy)
 calibration_results/
-test_results/
-ml_results/
-DL_results/
 data_calibration/
-Unet_results/
+test_results/
+DL_results/
+CLAUDE.md
 *.png

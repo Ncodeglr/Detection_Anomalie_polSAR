@@ -44,8 +44,6 @@ if __name__ == "__main__":
     for i in range(5):
         print(f"Score Train [{i}] : {train_scores[i]}")
 
-
-
     #4. Calibration du seuil sur le Valid
     print("\n[*] Évaluation sur le Valid pour calibration future du seuil...")
     valid_scores = depth_calib.score_batched(X_valid)

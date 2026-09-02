@@ -9,7 +9,7 @@ def compute_batched_global_covariance(batch_patches: np.ndarray) -> np.ndarray:
     """
     # B : taille du batch
     # channels : Le nombre de canaux polarimétriques (HH, HV, VH, VV)
-    # H et W : dimensions spatiales des patches
+    # H et W : dimensions spatiales des patch
     B, channels, H, W = batch_patches.shape
     Np = H * W # Nombre de pixels par patch
     
@@ -26,7 +26,7 @@ def extract_batched_correlation_features(C_batched: np.ndarray) -> np.ndarray:
     B = C_batched.shape[0]
     features = []
     
-    # 1. Extraction des 12 caractéristiques de corrélation (géométrie)
+    # 1. Extraction des 12 caractéristiques de corrélation  
     for i in range(4):
         for j in range(i): 
             norm_i = C_batched[:, i, i].real

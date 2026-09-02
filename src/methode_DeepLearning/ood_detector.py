@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 class OOD_Detector:
     def __init__(self, model, device="cpu"):
         """
-        Détecteur OoD spatial conçu pour les modèles de segmentation (UNet).
+        Détecteur OoD spatial conçu pour les modèles de segmentation.
         """
         self.model = model.to(device)
         self.model.eval()

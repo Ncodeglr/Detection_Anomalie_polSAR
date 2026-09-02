@@ -1,5 +1,5 @@
 #Configuration globale pour le pipeline de Détection d'Anomalies PolSAR
-#Approche Deep Learning (Unet Complexe)
+#Approche Deep Learning 
 
 seed: 42
 task: "reconstruction"

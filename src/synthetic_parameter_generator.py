@@ -42,7 +42,6 @@ class SyntheticParameterGenerator:
 
 if __name__ == "__main__":
     # 1. Instanciation
-    # On cible une phase moyenne de 45° (pi/4) avec une concentration de 10 (assez resserrée)
     generator = SyntheticParameterGenerator(
         mean_db=-15.0, 
         std_dev_amp=0.01,
